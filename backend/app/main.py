@@ -32,9 +32,10 @@ async def on_startup():
     try:
         from app.core.database import engine, Base
         import app.models  # Register ORM models
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        print("Database tables initialized.")
+        if engine is not None:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            print("Database tables initialized.")
     except Exception as e:
         print(f"DB connection skipped or failed: {e}")
 
