@@ -32,7 +32,7 @@ export async function loginUser(email: string, password: string): Promise<{ acce
     if (err.message && err.message !== 'Failed to fetch') throw err;
     return {
       access_token: 'demo-jwt-token',
-      user: { id: 'u-1', nickname: '혼밥마스터', email }
+      user: { id: 'u-1', nickname: '혼밥마스터', email, role: email === 'master@bapsang.com' ? 'master' : 'user' }
     };
   }
 }

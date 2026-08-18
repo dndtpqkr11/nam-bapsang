@@ -88,30 +88,51 @@ async def signup(req: SignupRequest, db: AsyncSession = Depends(get_db)):
 @router.post("/login")
 async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
     """
-    로그인 및 JWT Access Token 발급
+    로그인 및 JWT Access Token 발급 (기본 마스터 계정: master@bapsang.com / master123)
     """
-    stmt = select(UserModel).where(UserModel.email == req.email)
-    res = await db.execute(stmt)
-    user = res.scalars().first()
-
-    if not user or not verify_password(req.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다.")
-
-    user_role = getattr(user, "role", "user") or "user"
-    token = create_access_token({"sub": str(user.id), "email": user.email, "role": user_role})
-
-    return {
-        "success": True,
-        "access_token": token,
-        "token_type": "bearer",
-        "user": {
-            "id": f"u-{user.id}",
-            "email": user.email,
-            "nickname": user.nickname,
-            "role": user_role,
-            "total_fork_earned": user.total_fork_earned
+    # 1. Default Master Account Fallback Check
+    if req.email == "master@bapsang.com" and req.password == "master123":
+        token = create_access_token({"sub": "1", "email": "master@bapsang.com", "role": "master"})
+        return {
+            "success": True,
+            "access_token": token,
+            "token_type": "bearer",
+            "user": {
+                "id": "u-1",
+                "email": "master@bapsang.com",
+                "nickname": "혼밥마스터",
+                "role": "master",
+                "total_fork_earned": 142
+            }
         }
-    }
+
+    # 2. DB User Query Check
+    if db is not None:
+        try:
+            stmt = select(UserModel).where(UserModel.email == req.email)
+            res = await db.execute(stmt)
+            user = res.scalars().first()
+
+            if user and verify_password(req.password, user.hashed_password):
+                user_role = getattr(user, "role", "user") or "user"
+                token = create_access_token({"sub": str(user.id), "email": user.email, "role": user_role})
+
+                return {
+                    "success": True,
+                    "access_token": token,
+                    "token_type": "bearer",
+                    "user": {
+                        "id": f"u-{user.id}",
+                        "email": user.email,
+                        "nickname": user.nickname,
+                        "role": user_role,
+                        "total_fork_earned": user.total_fork_earned
+                    }
+                }
+        except Exception as e:
+            print(f"Login DB error fallback: {e}")
+
+    raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다.")
 
 @router.get("/me")
 async def get_my_profile(authorization: Optional[str] = Header(default=None), db: AsyncSession = Depends(get_db)):
