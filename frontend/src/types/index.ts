@@ -21,6 +21,7 @@ export interface Playlist {
   forked_from?: string;
   is_ott_scraped?: boolean;
   platform?: string;
+  is_live?: boolean;
 }
 
 export interface DeepLinkInfo {

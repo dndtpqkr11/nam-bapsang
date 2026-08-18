@@ -1053,12 +1053,10 @@ export default function HomePage() {
     connectedOtts: savedOttsState
   });
 
-  // 1. Live Co-watching Playlists (User created live rooms first at position 1, followed by default live rooms)
-  const defaultLiveRooms = allPlaylists
-    .filter((pl) => !userLiveRooms.some(u => u.id === pl.id) && (!pl.is_ott_scraped || pl.platform === 'youtube') && !pl.title.includes('영웅호걸') && !pl.title.includes('오선의 미국 증시'));
-
+  // 1. Live Co-watching Playlists (사용자가 직접 개설한 라이브 방만 표출)
+  const serverUserLiveRooms = allPlaylists.filter((pl) => pl.is_live);
   const liveRoomMap = new Map<string, Playlist>();
-  [...userLiveRooms, ...defaultLiveRooms].forEach(room => liveRoomMap.set(room.id, room));
+  [...userLiveRooms, ...serverUserLiveRooms].forEach(room => liveRoomMap.set(room.id, room));
   const liveCowatchingPlaylists = Array.from(liveRoomMap.values());
 
   // 2. Playlists Created by Other Users (통합 남이 차린 반찬 - 식사시간 탭 & OTT 탭 필터링 적용)
@@ -1287,38 +1285,57 @@ export default function HomePage() {
           )}
 
           <div className="max-h-[600px] overflow-y-auto pr-1.5 custom-scrollbar">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-              {liveCowatchingPlaylists.map((pl) => {
-                const isJoined = playingVideoState?.isLive && playingVideoState?.playlistId === pl.id;
-                const loggedUser = typeof window !== 'undefined' && localStorage.getItem('user')
-                  ? (() => { try { return JSON.parse(localStorage.getItem('user')!); } catch { return null; } })()
-                  : null;
-                const isUserCreatedRoom = (loggedUser && (
-                  pl.author_id === `u-${loggedUser.id}` ||
-                  pl.author === loggedUser.nickname ||
-                  pl.author === `${loggedUser.nickname} (방장)`
-                )) || pl.author_id === 'u-me' || pl.id.startsWith('pl-live-user-');
+            {liveCowatchingPlaylists.length === 0 ? (
+              <div className="glass-panel rounded-2xl p-8 border border-white/10 text-center space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto border border-rose-500/30">
+                  <Radio className="w-6 h-6 animate-pulse" />
+                </div>
+                <h4 className="text-base font-bold text-white">현재 진행 중인 실시간 합석 방이 없습니다.</h4>
+                <p className="text-xs text-gray-400 max-w-sm mx-auto">
+                  상단의 <span className="text-rose-400 font-bold">[🔴 라이브 방 열기]</span> 버튼을 눌러 첫 번째 방장이 되어 함께 시청해보세요!
+                </p>
+                <button
+                  onClick={handleOpenLiveRoomModal}
+                  className="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs shadow-md transition-all cursor-pointer inline-flex items-center gap-1.5"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>지금 내가 방장 되어 라이브 방 열기</span>
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                {liveCowatchingPlaylists.map((pl) => {
+                  const isJoined = playingVideoState?.isLive && playingVideoState?.playlistId === pl.id;
+                  const loggedUser = typeof window !== 'undefined' && localStorage.getItem('user')
+                    ? (() => { try { return JSON.parse(localStorage.getItem('user')!); } catch { return null; } })()
+                    : null;
+                  const isUserCreatedRoom = (loggedUser && (
+                    pl.author_id === `u-${loggedUser.id}` ||
+                    pl.author === loggedUser.nickname ||
+                    pl.author === `${loggedUser.nickname} (방장)`
+                  )) || pl.author_id === 'u-me' || pl.id.startsWith('pl-live-user-');
 
-                return (
-                  <PlaylistCard 
-                    key={`live-${pl.id}`} 
-                    playlist={pl} 
-                    onFork={() => handleFork(pl.id)} 
-                    onPlayVideo={(v) => setPlayingVideoState({ 
-                      video: v, 
-                      isLive: true, 
-                      playlistId: pl.id,
-                      initialWatchers: pl.active_watchers || 38,
-                      isHost: isUserCreatedRoom,
-                      hostNickname: pl.author || '방장'
-                    })} 
-                    showLiveBadge={true}
-                    isJoined={isJoined}
-                    onDeletePlaylist={(id) => handleDeleteLiveRoom(id)}
-                  />
-                );
-              })}
-            </div>
+                  return (
+                    <PlaylistCard 
+                      key={`live-${pl.id}`} 
+                      playlist={pl} 
+                      onFork={() => handleFork(pl.id)} 
+                      onPlayVideo={(v) => setPlayingVideoState({ 
+                        video: v, 
+                        isLive: true, 
+                        playlistId: pl.id,
+                        initialWatchers: pl.active_watchers || 38,
+                        isHost: isUserCreatedRoom,
+                        hostNickname: pl.author || '방장'
+                      })} 
+                      showLiveBadge={true}
+                      isJoined={isJoined}
+                      onDeletePlaylist={(id) => handleDeleteLiveRoom(id)}
+                    />
+                  );
+                })}
+              </div>
+            )}
           </div>
         </section>
 
