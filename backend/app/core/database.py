@@ -4,8 +4,10 @@ import os
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+asyncpg://bapsang:bapsang123@localhost:5433/nambapsang"
+    "sqlite+aiosqlite:///./nambapsang.db"
 )
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
 
 # Async SQLAlchemy Engine
 engine = create_async_engine(DATABASE_URL, echo=False, future=True)
