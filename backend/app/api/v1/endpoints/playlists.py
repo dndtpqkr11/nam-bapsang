@@ -79,6 +79,10 @@ async def list_playlists(
                         ]
                     })
         except Exception as db_err:
+            try:
+                await db.rollback()
+            except Exception:
+                pass
             print(f"DB fetch warning (memory list active): {db_err}")
 
     return {"success": True, "count": len(formatted_data), "data": formatted_data}
@@ -150,6 +154,10 @@ async def create_playlist(
                 db.add(new_playlist)
                 await db.commit()
             except Exception as db_err:
+                try:
+                    await db.rollback()
+                except Exception:
+                    pass
                 print(f"DB save warning (memory list active): {db_err}")
 
         return {
