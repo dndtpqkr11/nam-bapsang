@@ -138,12 +138,12 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCreateModal }) => {
                   {user.role === 'master' ? (
                     <>
                       <Crown className="w-3.5 h-3.5 text-amber-400" />
-                      <span className="font-black text-amber-300">{user.nickname} (👑 마스터)</span>
+                      <span className="font-black text-amber-300">{user.nickname} (마스터)</span>
                     </>
                   ) : (
                     <>
                       <User className="w-3.5 h-3.5 text-orange-400" />
-                      <span className="font-bold text-white">{user.nickname}</span>
+                      <span className="font-bold text-white">{user.nickname} (일반)</span>
                     </>
                   )}
                 </div>

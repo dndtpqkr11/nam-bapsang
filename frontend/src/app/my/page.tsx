@@ -9,14 +9,14 @@ import { UrlParserInput } from '@/components/UrlParserInput';
 import { Playlist, Video } from '@/types';
 import { fetchPlaylists, deletePlaylist } from '@/lib/api';
 import { formatSecondsToMMSS } from '@/lib/deeplink';
-import { Bookmark, User, Utensils, CheckCircle2, ArrowLeft, ThumbsUp, Pencil, X, Trash2 } from 'lucide-react';
+import { Bookmark, User, Utensils, CheckCircle2, ArrowLeft, ThumbsUp, Pencil, X, Trash2, Crown } from 'lucide-react';
 
 export default function MyPage() {
   const [profile, setProfile] = useState<{ nickname: string; email: string }>({
     nickname: '혼밥마스터',
     email: 'master@bapsang.com'
   });
-  const [user, setUser] = useState<{ nickname: string; email: string } | null>(null);
+  const [user, setUser] = useState<{ nickname: string; email: string; role?: string } | null>(null);
 
   const [myCreated, setMyCreated] = useState<Playlist[]>([]);
   const [recommendedPlaylists, setRecommendedPlaylists] = useState<Playlist[]>([]);
@@ -231,9 +231,16 @@ export default function MyPage() {
               <div>
                 <h1 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
                   <span>{displayNickname}</span>
-                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-orange-500/20 text-orange-400 font-bold border border-orange-500/30">
-                    프로 반찬러
-                  </span>
+                  {user?.role === 'master' ? (
+                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-black border border-amber-500/40 flex items-center gap-1">
+                      <Crown className="w-3.5 h-3.5 text-amber-400" />
+                      <span>👑 마스터</span>
+                    </span>
+                  ) : (
+                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-orange-500/20 text-orange-300 font-bold border border-orange-500/30">
+                      🍚 일반
+                    </span>
+                  )}
                 </h1>
                 <p className="text-xs text-gray-400 mt-1">{user ? user.email : profile.email}</p>
               </div>
