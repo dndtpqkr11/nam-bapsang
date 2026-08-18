@@ -61,19 +61,6 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
         : `👑 [${displayHostName}] 방장 님의 실시간 합석 라이브 방에 입장하셨습니다!`,
       timestamp: '방 안내',
       isSystem: true
-    },
-    {
-      id: 'm-1',
-      nickname: displayHostName,
-      text: '다들 반가워요! 맛있게 식사하면서 같이 비디오 봐요 🍚',
-      timestamp: '12:14',
-      isHostMsg: true
-    },
-    {
-      id: 'm-2',
-      nickname: '야식요정',
-      text: '이 영상 레전드 부분 3분 뒤에 나와요 ㅋㅋㅋ',
-      timestamp: '12:15'
     }
   ]);
   const [inputText, setInputText] = useState<string>('');
