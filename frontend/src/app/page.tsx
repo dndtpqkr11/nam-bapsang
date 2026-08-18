@@ -1290,7 +1290,15 @@ export default function HomePage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
               {liveCowatchingPlaylists.map((pl) => {
                 const isJoined = playingVideoState?.isLive && playingVideoState?.playlistId === pl.id;
-                const isUserCreatedRoom = pl.author_id === 'u-me' || pl.id.startsWith('pl-live-user-');
+                const loggedUser = typeof window !== 'undefined' && localStorage.getItem('user')
+                  ? (() => { try { return JSON.parse(localStorage.getItem('user')!); } catch { return null; } })()
+                  : null;
+                const isUserCreatedRoom = (loggedUser && (
+                  pl.author_id === `u-${loggedUser.id}` ||
+                  pl.author === loggedUser.nickname ||
+                  pl.author === `${loggedUser.nickname} (방장)`
+                )) || pl.author_id === 'u-me' || pl.id.startsWith('pl-live-user-');
+
                 return (
                   <PlaylistCard 
                     key={`live-${pl.id}`} 

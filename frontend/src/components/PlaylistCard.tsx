@@ -134,14 +134,22 @@ export const PlaylistCard: React.FC<PlaylistCardProps> = ({
     }
   };
 
-  const isUserCreated = playlist.author_id === 'u-me' || 
-                        playlist.id.startsWith('pl-my-') || 
-                        playlist.id.startsWith('pl-live-user-') ||
-                        (typeof window !== 'undefined' && (
-                          playlist.author === localStorage.getItem('user_nickname') ||
-                          (localStorage.getItem('user') && playlist.author === JSON.parse(localStorage.getItem('user')!).nickname) ||
-                          playlist.author === '독고다이'
-                        ));
+  const currentUser = typeof window !== 'undefined' && localStorage.getItem('user')
+    ? (() => { try { return JSON.parse(localStorage.getItem('user')!); } catch { return null; } })()
+    : null;
+
+  const isMaster = currentUser?.role === 'master';
+
+  const isUserCreated = isMaster || (currentUser && (
+    (playlist.author_id && playlist.author_id === `u-${currentUser.id}`) ||
+    (playlist.author && playlist.author === currentUser.nickname) ||
+    (playlist.author && playlist.author === `${currentUser.nickname} (방장)`) ||
+    (typeof window !== 'undefined' && localStorage.getItem('user_nickname') && playlist.author === localStorage.getItem('user_nickname'))
+  )) || (
+    playlist.author_id === 'u-me' || 
+    playlist.id.startsWith('pl-my-') || 
+    playlist.id.startsWith('pl-live-user-')
+  );
 
   // Meal duration tag badge
   const durationSec = playlist.total_duration_sec || 0;
