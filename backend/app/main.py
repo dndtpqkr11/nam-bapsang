@@ -30,14 +30,20 @@ async def direct_ws_2(websocket: WebSocket, playlist_id: str):
 
 @app.on_event("startup")
 async def on_startup():
-    # 테이블 자동 생성 (개발 환경)
+    # 테이블 자동 생성 및 schema alter (개발/운영 환경)
     try:
         from app.core.database import engine, Base
         import app.models  # Register ORM models
         if engine is not None:
             async with engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
-            print("Database tables initialized.")
+                # PostgreSQL schema migration: add role column if missing
+                try:
+                    from sqlalchemy import text
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'user';"))
+                except Exception as alter_err:
+                    print(f"Role column migration note: {alter_err}")
+            print("Database tables & schema migration initialized.")
     except Exception as e:
         print(f"DB connection skipped or failed: {e}")
 
