@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Utensils, Sparkles, BookmarkPlus, LogOut, User, CheckCircle2, Tv } from 'lucide-react';
+import { Utensils, Sparkles, BookmarkPlus, LogOut, User, CheckCircle2, Tv, Crown } from 'lucide-react';
 import { AuthModal } from '@/components/AuthModal';
 import { OttConnectModal } from '@/components/OttConnectModal';
 
@@ -11,7 +11,7 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ onOpenCreateModal }) => {
-  const [user, setUser] = useState<{ nickname: string; email: string } | null>(null);
+  const [user, setUser] = useState<{ nickname: string; email: string; role?: string } | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('signup');
@@ -46,9 +46,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCreateModal }) => {
     showToast('로그아웃 되었습니다.');
   };
 
-  const handleAuthSuccess = (loggedUser: { nickname: string; email: string }) => {
+  const handleAuthSuccess = (loggedUser: { nickname: string; email: string; role?: string }) => {
     setUser(loggedUser);
-    showToast(`${loggedUser.nickname}님 환영합니다!`);
+    showToast(`${loggedUser.nickname}님 환영합니다! ${loggedUser.role === 'master' ? '👑 (마스터 관리자 권한)' : ''}`);
   };
 
   const showToast = (msg: string) => {
@@ -130,9 +130,22 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCreateModal }) => {
             {/* User Profile / Auth Buttons */}
             {user ? (
               <div className="flex items-center gap-2 pl-2 border-l border-white/10">
-                <div className="hidden md:flex items-center gap-1.5 text-xs text-gray-300 font-medium bg-white/5 px-2.5 py-1.5 rounded-lg">
-                  <User className="w-3.5 h-3.5 text-orange-400" />
-                  <span className="font-bold text-white">{user.nickname}</span>
+                <div className={`hidden md:flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border ${
+                  user.role === 'master'
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold'
+                    : 'bg-white/5 text-gray-300 border-white/10'
+                }`}>
+                  {user.role === 'master' ? (
+                    <>
+                      <Crown className="w-3.5 h-3.5 text-amber-400" />
+                      <span className="font-black text-amber-300">{user.nickname} (👑 마스터)</span>
+                    </>
+                  ) : (
+                    <>
+                      <User className="w-3.5 h-3.5 text-orange-400" />
+                      <span className="font-bold text-white">{user.nickname}</span>
+                    </>
+                  )}
                 </div>
                 <button
                   onClick={handleLogout}
