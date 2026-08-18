@@ -1,0 +1,111 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-main: #080b11;
+  --bg-card: rgba(18, 22, 33, 0.85);
+  --bg-card-hover: rgba(26, 31, 46, 0.95);
+  --primary: #FF6B00;
+  --primary-hover: #FF8533;
+  --text-main: #F8FAFC;
+  --text-muted: #94A3B8;
+  --border-color: rgba(255, 255, 255, 0.08);
+}
+
+body {
+  background-color: var(--bg-main);
+  background-image: 
+    radial-gradient(circle at 50% 0%, rgba(255, 107, 0, 0.08) 0%, transparent 60%),
+    radial-gradient(circle at 100% 50%, rgba(245, 158, 11, 0.04) 0%, transparent 50%);
+  background-attachment: fixed;
+  color: var(--text-main);
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  letter-spacing: -0.01em;
+}
+
+/* Explicit 2-Column Grid Layout (1행 2개 필수 보장) */
+.grid-2-columns {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 1.5rem !important;
+}
+
+@media (max-width: 640px) {
+  .grid-2-columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 1rem !important;
+  }
+}
+
+/* Glassmorphism Panel */
+.glass-panel {
+  background: var(--bg-card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-color);
+}
+
+.glass-panel-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-panel-hover:hover {
+  background: var(--bg-card-hover);
+  border-color: rgba(255, 107, 0, 0.35);
+  transform: translateY(-2px);
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), 0 0 20px -5px rgba(255, 107, 0, 0.15);
+}
+
+/* Custom Glows and Shimmers */
+.orange-gradient-btn {
+  background: linear-gradient(135deg, #FF6B00 0%, #E65100 100%);
+  transition: all 0.25s ease;
+}
+
+.orange-gradient-btn:hover {
+  background: linear-gradient(135deg, #FF8533 0%, #FF6B00 100%);
+  box-shadow: 0 8px 24px -4px rgba(255, 107, 0, 0.45);
+}
+
+.hero-banner-glow {
+  background: linear-gradient(135deg, rgba(255, 107, 0, 0.16) 0%, rgba(245, 158, 11, 0.08) 50%, rgba(18, 22, 33, 0.85) 100%);
+  border: 1px solid rgba(255, 107, 0, 0.25);
+  box-shadow: 0 20px 50px -10px rgba(255, 107, 0, 0.12);
+}
+
+/* Pulse animation for active watchers */
+.pulsing-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #22C55E;
+  box-shadow: 0 0 10px #22C55E;
+  animation: pulse 1.5s infinite alternate;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.4; transform: scale(0.9); }
+  100% { opacity: 1; transform: scale(1.15); }
+}
+
+/* Smooth Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: #080b11;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 107, 0, 0.5);
+}
