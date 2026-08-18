@@ -657,13 +657,11 @@ export default function HomePage() {
       if (data && data.length > 0) {
         // Extract shared live rooms created by any user from backend
         const sharedLive = data.filter((pl) => (pl as any).is_live || pl.id.startsWith('pl-live-'));
-        if (sharedLive.length > 0) {
-          setUserLiveRooms((prev) => {
-            const combinedMap = new Map<string, Playlist>();
-            [...sharedLive, ...localLive, ...prev].forEach((item) => combinedMap.set(item.id, item));
-            return Array.from(combinedMap.values());
-          });
-        }
+        setUserLiveRooms((prev) => {
+          const combinedMap = new Map<string, Playlist>();
+          [...sharedLive, ...localLive, ...prev].forEach((item) => combinedMap.set(item.id, item));
+          return Array.from(combinedMap.values());
+        });
         setPlaylists([...localCreated, ...data]);
       } else {
         setPlaylists([...localCreated, ...FALLBACK_PLAYLISTS]);
@@ -1055,12 +1053,13 @@ export default function HomePage() {
     connectedOtts: savedOttsState
   });
 
-  // 1. Live Co-watching Playlists (방장 입맛대로 틀어주는 방 - 영웅호걸/증시 영상 제외, 대표 4개 라이브 방)
+  // 1. Live Co-watching Playlists (User created live rooms first at position 1, followed by default live rooms)
   const defaultLiveRooms = allPlaylists
-    .filter((pl) => (!pl.is_ott_scraped || pl.platform === 'youtube') && !pl.title.includes('영웅호걸') && !pl.title.includes('오선의 미국 증시'))
-    .slice(0, 4);
+    .filter((pl) => !userLiveRooms.some(u => u.id === pl.id) && (!pl.is_ott_scraped || pl.platform === 'youtube') && !pl.title.includes('영웅호걸') && !pl.title.includes('오선의 미국 증시'));
 
-  const liveCowatchingPlaylists = [...userLiveRooms, ...defaultLiveRooms];
+  const liveRoomMap = new Map<string, Playlist>();
+  [...userLiveRooms, ...defaultLiveRooms].forEach(room => liveRoomMap.set(room.id, room));
+  const liveCowatchingPlaylists = Array.from(liveRoomMap.values());
 
   // 2. Playlists Created by Other Users (통합 남이 차린 반찬 - 식사시간 탭 & OTT 탭 필터링 적용)
   let otherUsersPlaylists = isPreviewingAsOtherUser
