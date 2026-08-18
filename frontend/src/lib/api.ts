@@ -1,6 +1,6 @@
 import { Playlist, Video } from '@/types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://odd-turtles-rest.loca.lt/api/v1';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://nam-bapsang-backend.onrender.com/api/v1';
 
 export async function loginUser(email: string, password: string): Promise<{ access_token: string; user: any }> {
   try {

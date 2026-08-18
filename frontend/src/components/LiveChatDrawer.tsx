@@ -120,14 +120,12 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
         return `${process.env.NEXT_PUBLIC_WS_URL}/api/v1/presence/ws/${roomId}`;
       }
       if (typeof window !== 'undefined') {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const host = window.location.hostname;
         if (host === 'localhost' || host === '127.0.0.1') {
           return `ws://${host}:8000/api/v1/presence/ws/${roomId}`;
         }
-        return `${protocol}//${host}:8000/api/v1/presence/ws/${roomId}`;
       }
-      return `ws://localhost:8000/api/v1/presence/ws/${roomId}`;
+      return `wss://nam-bapsang-backend.onrender.com/api/v1/presence/ws/${roomId}`;
     };
 
     const wsUrl = getWebSocketUrl(playlistId);
