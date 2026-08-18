@@ -66,6 +66,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCreateModal }) => {
       )}
 
       <AuthModal
+        key={`${authMode}-${isAuthModalOpen}`}
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
         onSuccess={handleAuthSuccess}
