@@ -10,6 +10,7 @@ from app.core.security import hash_password, verify_password, create_access_toke
 router = APIRouter()
 
 MASTER_SECRET_KEY = "MASTER2026"
+MASTER_CLAIMED: bool = False
 
 class SignupRequest(BaseModel):
     email: str
@@ -24,8 +25,10 @@ class LoginRequest(BaseModel):
 @router.post("/signup")
 async def signup(req: SignupRequest, db: AsyncSession = Depends(get_db)):
     """
-    신규 회원가입 및 PostgreSQL DB 저장 (마스터 보안키 입력 시 관리자 권한 부여)
+    신규 회원가입 및 PostgreSQL DB 저장 (단 1개의 마스터 계정만 허용)
     """
+    global MASTER_CLAIMED
+
     stmt = select(UserModel).where(UserModel.email == req.email)
     res = await db.execute(stmt)
     if res.scalars().first():
@@ -33,10 +36,28 @@ async def signup(req: SignupRequest, db: AsyncSession = Depends(get_db)):
 
     user_role = "user"
     if req.master_key and req.master_key.strip():
-        if req.master_key.strip() == MASTER_SECRET_KEY:
-            user_role = "master"
-        else:
+        if req.master_key.strip() != MASTER_SECRET_KEY:
             raise HTTPException(status_code=400, detail="입력하신 마스터 인증키가 올바르지 않습니다.")
+
+        # 시스템 내 이미 마스터 계정이 존재하는지 검증 (단 1개만 생성 허용)
+        if MASTER_CLAIMED:
+            raise HTTPException(
+                status_code=400, 
+                detail="이미 시스템 마스터(관리자) 계정이 이미 선점되어 생성되었습니다. 마스터 계정은 유일하게 1개만 소유 가능합니다."
+            )
+
+        if db is not None:
+            stmt_master = select(UserModel).where(UserModel.role == "master")
+            res_master = await db.execute(stmt_master)
+            if res_master.scalars().first():
+                MASTER_CLAIMED = True
+                raise HTTPException(
+                    status_code=400, 
+                    detail="이미 시스템 마스터(관리자) 계정이 선점되어 생성되었습니다. 마스터 계정은 유일하게 1개만 소유 가능합니다."
+                )
+
+        user_role = "master"
+        MASTER_CLAIMED = True
 
     new_user = UserModel(
         email=req.email,
