@@ -1,13 +1,7 @@
-import sys
-import os
-
-backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if backend_dir not in sys.path:
-    sys.path.insert(0, backend_dir)
-
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.router import api_router
+from app.api.v1.endpoints.presence import websocket_presence
 
 app = FastAPI(
     title="남의 밥상 (MealTable) API",
@@ -25,6 +19,11 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix="/api/v1")
+
+@app.websocket("/ws/{playlist_id}")
+@app.websocket("/api/v1/presence/ws/{playlist_id}")
+async def direct_websocket(websocket: WebSocket, playlist_id: str):
+    await websocket_presence(websocket, playlist_id)
 
 @app.on_event("startup")
 async def on_startup():
