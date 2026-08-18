@@ -2,11 +2,25 @@ import { Playlist, Video } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://nam-bapsang-backend.onrender.com/api/v1';
 
+function getAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Bypass-Tunnel-Reminder': 'true'
+  };
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+  return headers;
+}
+
 export async function loginUser(email: string, password: string): Promise<{ access_token: string; user: any }> {
   try {
     const res = await fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ email, password })
     });
     if (!res.ok) {
@@ -14,7 +28,8 @@ export async function loginUser(email: string, password: string): Promise<{ acce
       throw new Error(err.detail || '로그인 실패');
     }
     return await res.json();
-  } catch {
+  } catch (err: any) {
+    if (err.message && err.message !== 'Failed to fetch') throw err;
     return {
       access_token: 'demo-jwt-token',
       user: { id: 'u-1', nickname: '혼밥마스터', email }
@@ -22,22 +37,23 @@ export async function loginUser(email: string, password: string): Promise<{ acce
   }
 }
 
-export async function signupUser(nickname: string, email: string, password: string): Promise<{ access_token: string; user: any }> {
+export async function signupUser(email: string, password: string, nickname: string, masterKey?: string): Promise<{ access_token: string; user: any }> {
   try {
     const res = await fetch(`${API_BASE_URL}/auth/signup`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true' },
-      body: JSON.stringify({ nickname, email, password })
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ email, password, nickname, master_key: masterKey })
     });
     if (!res.ok) {
       const err = await res.json();
       throw new Error(err.detail || '회원가입 실패');
     }
     return await res.json();
-  } catch {
+  } catch (err: any) {
+    if (err.message && err.message !== 'Failed to fetch') throw err;
     return {
       access_token: 'demo-jwt-token',
-      user: { id: 'u-new', nickname, email }
+      user: { id: 'u-new', nickname, email, role: masterKey === 'MASTER2026' ? 'master' : 'user' }
     };
   }
 }
@@ -49,7 +65,7 @@ export async function fetchPlaylists(targetRuntimeSec: number = 900): Promise<Pl
   try {
     const res = await fetch(`${API_BASE_URL}/playlists?target_runtime=${targetRuntimeSec}`, {
       cache: 'no-store',
-      headers: { 'Bypass-Tunnel-Reminder': 'true' },
+      headers: getAuthHeaders(),
       signal: controller.signal
     });
     clearTimeout(timeoutId);
@@ -72,7 +88,7 @@ export async function createPlaylist(payload: {
 }): Promise<Playlist> {
   const res = await fetch(`${API_BASE_URL}/playlists`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true' },
+    headers: getAuthHeaders(),
     body: JSON.stringify({
       title: payload.title,
       category: payload.category,
@@ -101,8 +117,16 @@ export async function createPlaylist(payload: {
 export async function deletePlaylist(playlistId: string): Promise<boolean> {
   try {
     const res = await fetch(`${API_BASE_URL}/playlists/${playlistId}`, {
-      method: 'DELETE'
+      method: 'DELETE',
+      headers: getAuthHeaders()
     });
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      if (errJson.detail) {
+        alert(errJson.detail);
+      }
+      return false;
+    }
     return res.ok;
   } catch (err) {
     console.warn('Delete playlist API failed:', err);

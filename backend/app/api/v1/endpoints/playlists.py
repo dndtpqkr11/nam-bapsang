@@ -1,6 +1,6 @@
 import uuid
 import time
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, HTTPException, Query, Depends, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -10,10 +10,31 @@ from app.core.database import get_db
 from app.models.playlist import Playlist as PlaylistModel, PlaylistItem
 from app.models.video import Video as VideoModel
 from app.models.user import User as UserModel
+from app.core.security import decode_access_token
 
 router = APIRouter()
 
 SHARED_LIVE_ROOMS: List[dict] = []
+
+async def get_current_user_optional(
+    authorization: Optional[str] = Header(default=None),
+    db: Optional[AsyncSession] = Depends(get_db)
+) -> Optional[UserModel]:
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    token = authorization.split(" ")[1]
+    payload = decode_access_token(token)
+    if not payload or "sub" not in payload:
+        return None
+    if db is not None:
+        try:
+            user_id = int(payload["sub"])
+            stmt = select(UserModel).where(UserModel.id == user_id)
+            res = await db.execute(stmt)
+            return res.scalars().first()
+        except Exception:
+            pass
+    return None
 
 class CreateVideoItemRequest(BaseModel):
     title: str
@@ -90,18 +111,23 @@ async def list_playlists(
 @router.post("")
 async def create_playlist(
     payload: CreatePlaylistRequest,
+    authorization: Optional[str] = Header(default=None),
     db: Optional[AsyncSession] = Depends(get_db)
 ):
     """
-    새로운 15분 식사 맞춤 밥상(플레이리스트)을 생성하고 메모리 버스 및 DB에 공유 저장합니다.
+    새로운 15분 식사 맞춤 밥상(플레이리스트)을 생성하고 JWT 작성자 할당 후 저장합니다.
     """
     global SHARED_LIVE_ROOMS
     try:
         if not payload.videos:
             raise HTTPException(status_code=400, detail="최소 1개 이상의 영입 비디오가 필요합니다.")
 
+        current_user = await get_current_user_optional(authorization, db)
+        author_name = current_user.nickname if current_user else (payload.author_name or "독고다이")
+        author_id_str = f"u-{current_user.id}" if current_user else "u-user"
+        author_id_num = current_user.id if current_user else 1
+
         total_duration = sum(v.duration_seconds for v in payload.videos)
-        author_name = payload.author_name or "독고다이"
         unique_id = str(uuid.uuid4())[:8]
 
         created_videos = [
@@ -123,7 +149,7 @@ async def create_playlist(
             "id": room_id,
             "title": payload.title,
             "author": author_name,
-            "author_id": "u-user",
+            "author_id": author_id_str,
             "category": payload.category,
             "total_duration_sec": total_duration,
             "fork_count": 0,
@@ -132,22 +158,15 @@ async def create_playlist(
             "videos": created_videos
         }
 
-        # ALWAYS insert into SHARED_LIVE_ROOMS in-memory list
         SHARED_LIVE_ROOMS = [r for r in SHARED_LIVE_ROOMS if r["id"] != res_data["id"]]
         SHARED_LIVE_ROOMS.insert(0, res_data)
 
-        # Try DB persistence if db session is available
         if db is not None:
             try:
-                stmt_user = select(UserModel).limit(1)
-                res_user = await db.execute(stmt_user)
-                user = res_user.scalars().first()
-                author_id = user.id if user else 1
-
                 new_playlist = PlaylistModel(
                     title=payload.title,
                     category=payload.category,
-                    author_id=author_id,
+                    author_id=author_id_num,
                     total_duration_sec=total_duration,
                     fork_count=0
                 )
@@ -276,21 +295,56 @@ async def fork_playlist(playlist_id: str, db: AsyncSession = Depends(get_db)):
     }
 
 @router.delete("/{playlist_id}")
-async def delete_playlist(playlist_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_playlist(
+    playlist_id: str,
+    authorization: Optional[str] = Header(default=None),
+    db: AsyncSession = Depends(get_db)
+):
     """
-    내가 차린 밥상(플레이리스트) 및 공유 라이브 방 삭제 API
+    내가 차린 밥상(플레이리스트) 및 공유 라이브 방 삭제 API (JWT 인증 및 작성자 검증 적용)
     """
     global SHARED_LIVE_ROOMS
-    SHARED_LIVE_ROOMS = [r for r in SHARED_LIVE_ROOMS if r["id"] != playlist_id]
+
+    current_user = await get_current_user_optional(authorization, db)
+
+    target_room = next((r for r in SHARED_LIVE_ROOMS if r["id"] == playlist_id), None)
+    db_pl = None
     try:
         clean_id_str = playlist_id.replace("pl-live-", "").replace("pl-my-", "").replace("pl-", "")
         clean_id = int(clean_id_str)
         stmt = select(PlaylistModel).where(PlaylistModel.id == clean_id)
         res = await db.execute(stmt)
-        pl = res.scalars().first()
-        if pl:
-            await db.delete(pl)
-            await db.commit()
+        db_pl = res.scalars().first()
     except Exception:
         pass
-    return {"success": True, "message": "밥상 및 라이브 방이 삭제되었습니다."}
+
+    is_master = False
+    if current_user and getattr(current_user, "role", "user") == "master":
+        is_master = True
+
+    if not is_master:
+        if db_pl:
+            if not current_user:
+                raise HTTPException(status_code=401, detail="밥상을 삭제하려면 로그인이 필요합니다.")
+            if db_pl.author_id != current_user.id:
+                raise HTTPException(status_code=403, detail="일반 유저는 본인이 작성한 밥상만 삭제할 수 있습니다. (전체 삭제는 👑 마스터 권한이 필요합니다)")
+
+        if target_room:
+            room_author = target_room.get("author")
+            room_author_id = target_room.get("author_id")
+            if current_user:
+                if room_author_id and room_author_id != f"u-{current_user.id}" and room_author != current_user.nickname:
+                    raise HTTPException(status_code=403, detail="일반 유저는 본인이 생성한 라이브 밥상방만 삭제할 수 있습니다. (전체 삭제는 👑 마스터 권한이 필요합니다)")
+            else:
+                if room_author_id and room_author_id != "u-user":
+                    raise HTTPException(status_code=401, detail="라이브 방을 삭제하려면 로그인이 필요합니다.")
+
+    SHARED_LIVE_ROOMS = [r for r in SHARED_LIVE_ROOMS if r["id"] != playlist_id]
+    if db_pl:
+        await db.delete(db_pl)
+        await db.commit()
+
+    return {
+        "success": True, 
+        "message": "👑 [마스터 관리자] 밥상이 전체 삭제되었습니다." if is_master else "밥상이 정상 삭제되었습니다."
+    }

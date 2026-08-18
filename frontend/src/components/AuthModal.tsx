@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, UserPlus, LogIn, Mail, Lock, User, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { X, UserPlus, LogIn, Mail, Lock, User, AlertCircle, CheckCircle2, Crown, Key } from 'lucide-react';
 import { signupUser, loginUser } from '@/lib/api';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (user: { nickname: string; email: string }) => void;
+  onSuccess: (user: { nickname: string; email: string; role?: string }) => void;
   initialMode?: 'login' | 'signup';
 }
 
@@ -21,6 +21,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [nickname, setNickname] = useState('');
+  const [masterKey, setMasterKey] = useState('');
+  const [showMasterInput, setShowMasterInput] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,7 +38,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         if (!nickname.trim()) {
           throw new Error('닉네임을 입력해주세요.');
         }
-        const data = await signupUser(email, password, nickname);
+        const data = await signupUser(email, password, nickname, showMasterInput ? masterKey.trim() : undefined);
         if (data.access_token) {
           localStorage.setItem('access_token', data.access_token);
         }
@@ -49,7 +51,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         if (data.access_token) {
           localStorage.setItem('access_token', data.access_token);
         }
-        const userObj = data.user || { nickname: email.split('@')[0], email };
+        const userObj = data.user || { nickname: email.split('@')[0], email, role: 'user' };
         localStorage.setItem('user', JSON.stringify(userObj));
         onSuccess(userObj);
         onClose();
@@ -113,7 +115,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </h3>
           <p className="text-xs text-gray-400 mt-1">
             {mode === 'signup'
-              ? '가입 후 나만의 15분 맞춤 플레이리스트를 저장해보세요.'
+              ? '가입 후 나만의 15분 맞춤 플레이리스트를 자유롭게 즐겨보세요.'
               : '등록된 이메일과 비밀번호로 로그인하세요.'}
           </p>
         </div>
@@ -129,22 +131,57 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         {/* Auth Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           {mode === 'signup' && (
-            <div>
-              <label className="block text-xs font-bold text-gray-300 mb-1.5">
-                닉네임
-              </label>
-              <div className="relative">
-                <User className="w-4 h-4 text-gray-400 absolute left-3.5 top-3" />
-                <input
-                  type="text"
-                  value={nickname}
-                  onChange={(e) => setNickname(e.target.value)}
-                  placeholder="예: 혼밥마스터"
-                  required
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/5 text-sm text-white placeholder-gray-500 border border-white/10 focus:outline-none focus:border-orange-500"
-                />
+            <>
+              <div>
+                <label className="block text-xs font-bold text-gray-300 mb-1.5">
+                  닉네임
+                </label>
+                <div className="relative">
+                  <User className="w-4 h-4 text-gray-400 absolute left-3.5 top-3" />
+                  <input
+                    type="text"
+                    value={nickname}
+                    onChange={(e) => setNickname(e.target.value)}
+                    placeholder="예: 혼밥마스터"
+                    required
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/5 text-sm text-white placeholder-gray-500 border border-white/10 focus:outline-none focus:border-orange-500"
+                  />
+                </div>
               </div>
-            </div>
+
+              {/* Master Key Input Option */}
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowMasterInput(!showMasterInput)}
+                  className="text-[11px] font-bold text-amber-400 hover:text-amber-300 transition-all flex items-center gap-1 cursor-pointer select-none"
+                >
+                  <Key className="w-3.5 h-3.5" />
+                  <span>{showMasterInput ? '🔑 마스터 인증키 입력 접기' : '🔑 마스터 관리자 인증키가 있으신가요?'}</span>
+                </button>
+
+                {showMasterInput && (
+                  <div className="mt-2 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-1.5 animate-fadeIn">
+                    <label className="block text-[11px] font-bold text-amber-300">
+                      마스터 보안키 입력
+                    </label>
+                    <div className="relative">
+                      <Crown className="w-4 h-4 text-amber-400 absolute left-3 top-2.5" />
+                      <input
+                        type="password"
+                        value={masterKey}
+                        onChange={(e) => setMasterKey(e.target.value)}
+                        placeholder="보안키 입력 (예: MASTER2026)"
+                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-black/50 text-xs text-amber-200 placeholder-amber-500/50 border border-amber-500/40 focus:outline-none focus:border-amber-400 font-mono"
+                      />
+                    </div>
+                    <p className="text-[10px] text-amber-400/80">
+                      * 올바른 마스터 보안키 입력 시 전체 밥상 관리 및 삭제 권한을 가집니다.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </>
           )}
 
           <div>

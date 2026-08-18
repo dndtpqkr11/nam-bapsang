@@ -114,7 +114,9 @@ async def websocket_presence(websocket: WebSocket, playlist_id: str):
                             "nickname": payload.get("nickname", "익명의 밥상러"),
                             "text": payload.get("text", ""),
                             "timestamp": payload.get("timestamp"),
-                            "is_host": payload.get("is_host", False)
+                            "is_host": payload.get("is_host", False),
+                            "sender_id": payload.get("sender_id") or session_id,
+                            "msg_id": payload.get("msg_id") or str(uuid.uuid4())
                         }
                         await manager.broadcast_payload(playlist_id, chat_event)
 

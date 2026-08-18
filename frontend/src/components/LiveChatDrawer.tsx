@@ -85,6 +85,24 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
+  // Persistent Client Session ID (to avoid deduplicating by nickname)
+  const clientSessionIdRef = useRef<string>(
+    typeof window !== 'undefined'
+      ? `client-${Math.random().toString(36).substring(2, 9)}-${Date.now()}`
+      : 'client-anon'
+  );
+
+  // Track latest props & state in refs to prevent WebSocket reconnection on prop/state changes
+  const nicknameRef = useRef(nickname);
+  const isHostRef = useRef(isHost);
+  const onHostVideoChangeRef = useRef(onHostVideoChange);
+  const baseWatchersRef = useRef(baseWatchers);
+
+  useEffect(() => { nicknameRef.current = nickname; }, [nickname]);
+  useEffect(() => { isHostRef.current = isHost; }, [isHost]);
+  useEffect(() => { onHostVideoChangeRef.current = onHostVideoChange; }, [onHostVideoChange]);
+  useEffect(() => { baseWatchersRef.current = baseWatchers; }, [baseWatchers]);
+
   useEffect(() => {
     if (chatScrollRef.current) {
       const el = chatScrollRef.current;
@@ -100,6 +118,8 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
   }, [baseWatchers]);
 
   useEffect(() => {
+    // 1. Initialize nickname from localStorage once on mount
+    let myName = '독고다이';
     if (typeof window !== 'undefined') {
       let myNick = localStorage.getItem('user_nickname');
       if (!myNick) {
@@ -111,9 +131,11 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
           } catch {}
         }
       }
-      const myName = myNick || '독고다이';
-      setNickname(isHost ? `${myName} (방장)` : myName);
+      if (myNick) myName = myNick;
     }
+    const initNick = isHost ? `${myName} (방장)` : myName;
+    setNickname(initNick);
+    nicknameRef.current = initNick;
 
     const getWebSocketUrl = (roomId: string): string => {
       if (process.env.NEXT_PUBLIC_WS_URL) {
@@ -130,6 +152,7 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
 
     const wsUrl = getWebSocketUrl(playlistId);
     let ws: WebSocket;
+    let pingInterval: NodeJS.Timeout;
 
     try {
       ws = new WebSocket(wsUrl);
@@ -137,7 +160,14 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
 
       ws.onopen = () => {
         setIsConnected(true);
-        setActiveWatchers(baseWatchers + 1);
+        setActiveWatchers(baseWatchersRef.current + 1);
+
+        // Keep-Alive Ping every 15s
+        pingInterval = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send('ping');
+          }
+        }, 15000);
       };
 
       ws.onmessage = (event) => {
@@ -145,11 +175,13 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
           const data = JSON.parse(event.data);
           if (data.type === 'PRESENCE_UPDATE') {
             const liveOffset = Math.max(1, data.active_watchers || 1);
-            setActiveWatchers(baseWatchers + liveOffset);
+            setActiveWatchers(baseWatchersRef.current + liveOffset);
           } else if (data.type === 'CHAT_MESSAGE') {
-            if (data.nickname !== nickname) {
+            // Deduplicate using sender_id (ignore broadcast of own messages)
+            const isFromOtherSender = data.sender_id ? (data.sender_id !== clientSessionIdRef.current) : (data.nickname !== nicknameRef.current);
+            if (isFromOtherSender) {
               const newMsg: ChatMessage = {
-                id: `m-${Date.now()}-${Math.random()}`,
+                id: data.msg_id || `m-${Date.now()}-${Math.random()}`,
                 nickname: data.nickname || '익명의 밥상러',
                 text: data.text,
                 timestamp: data.timestamp || new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
@@ -159,8 +191,8 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
               setMessages((prev) => [...prev, newMsg]);
             }
           } else if (data.type === 'HOST_CHANGE_VIDEO') {
-            if (data.video && onHostVideoChange) {
-              onHostVideoChange(data.video);
+            if (data.video && onHostVideoChangeRef.current) {
+              onHostVideoChangeRef.current(data.video);
             }
             if (data.system_message) {
               const sysMsg: ChatMessage = {
@@ -178,28 +210,33 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
 
       ws.onclose = () => {
         setIsConnected(false);
-        setActiveWatchers(baseWatchers + 1);
+        if (pingInterval) clearInterval(pingInterval);
+      };
+
+      ws.onerror = () => {
+        setIsConnected(false);
       };
     } catch {
       setIsConnected(false);
-      setActiveWatchers(baseWatchers + 1);
     }
 
     return () => {
+      if (pingInterval) clearInterval(pingInterval);
       if (wsRef.current) {
         wsRef.current.close();
       }
     };
-  }, [playlistId, nickname, baseWatchers, onHostVideoChange, isHost]);
+  }, [playlistId]);
 
   const handleSendMessage = (textToSend?: string) => {
     const msgText = (textToSend || inputText).trim();
     if (!msgText) return;
 
     const timeStr = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+    const msgId = `m-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
     const newMsg: ChatMessage = {
-      id: `m-${Date.now()}`,
+      id: msgId,
       nickname: nickname,
       text: msgText,
       timestamp: timeStr,
@@ -222,7 +259,9 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
           nickname: nickname,
           text: msgText,
           timestamp: timeStr,
-          is_host: isHost
+          is_host: isHost,
+          sender_id: clientSessionIdRef.current,
+          msg_id: msgId
         }));
       } catch {}
     }
