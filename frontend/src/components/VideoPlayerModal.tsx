@@ -15,6 +15,7 @@ interface VideoPlayerModalProps {
   isHost?: boolean;
   hostNickname?: string;
   onDeleteLiveRoom?: (playlistId: string) => void;
+  onRoomDeleted?: () => void;
 }
 
 const ottDisplayNames: Record<string, string> = {
@@ -34,7 +35,8 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   initialWatchers = 38,
   isHost = false,
   hostNickname,
-  onDeleteLiveRoom
+  onDeleteLiveRoom,
+  onRoomDeleted
 }) => {
   const [currentVideo, setCurrentVideo] = useState<Video | null>(video);
   const [startSeconds, setStartSeconds] = useState<number>(0);
@@ -222,6 +224,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                   hostNickname={hostNickname || activeVid.channel_title}
                   onHostVideoChange={(newVid, elapsed) => handleVideoChange(newVid, elapsed)}
                   onDeleteLiveRoom={onDeleteLiveRoom}
+                  onRoomDeleted={onRoomDeleted}
                 />
               </div>
             </div>

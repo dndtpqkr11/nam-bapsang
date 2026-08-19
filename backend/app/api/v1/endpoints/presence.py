@@ -109,6 +109,27 @@ class ConnectionManager:
         for dead in dead_sockets:
             self.active_connections[playlist_id].discard(dead)
 
+    async def notify_room_deleted(self, playlist_id: str):
+        message = {
+            "type": "ROOM_DELETED",
+            "playlist_id": playlist_id,
+            "message": "👑 방장에 의해 라이브 밥상방이 삭제되었습니다."
+        }
+        await self.broadcast_payload(playlist_id, message)
+
+        if playlist_id in self.room_hosts:
+            del self.room_hosts[playlist_id]
+        if playlist_id in self.room_chat_history:
+            del self.room_chat_history[playlist_id]
+        if playlist_id in self.room_video_state:
+            del self.room_video_state[playlist_id]
+        try:
+            from app.core.redis import get_redis_client
+            r = await get_redis_client()
+            await r.delete(f"presence:{playlist_id}")
+        except Exception:
+            pass
+
 manager = ConnectionManager()
 
 @router.get("/{playlist_id}/count")
@@ -174,6 +195,9 @@ async def websocket_presence(websocket: WebSocket, playlist_id: str):
                             "system_message": f"👑 {payload.get('host_nickname', '방장')} 님이 실시간 반찬 영상을 교체하셨습니다!"
                         }
                         await manager.broadcast_payload(playlist_id, sync_event)
+
+                    elif msg_type == "DELETE_ROOM":
+                        await manager.notify_room_deleted(playlist_id)
 
                 except Exception:
                     pass

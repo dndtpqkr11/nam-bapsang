@@ -357,6 +357,13 @@ async def delete_playlist(
             await db.rollback()
             print(f"DB delete error: {del_err}")
 
+    # Notify active live room watchers via WebSocket
+    try:
+        from app.api.v1.endpoints.presence import manager
+        await manager.notify_room_deleted(playlist_id)
+    except Exception as notify_err:
+        print(f"Notify room deleted warning: {notify_err}")
+
     return {
         "success": True, 
         "message": "👑 [마스터 관리자] 밥상이 전체 삭제되었습니다." if is_master else "밥상이 정상 삭제되었습니다."

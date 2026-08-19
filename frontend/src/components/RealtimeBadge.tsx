@@ -19,8 +19,21 @@ export const RealtimeBadge: React.FC<RealtimeBadgeProps> = ({
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    const wsBaseUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/api/v1';
-    const wsUrl = `${wsBaseUrl}/presence/ws/${playlistId}`;
+    const getWebSocketUrl = (roomId: string): string => {
+      if (process.env.NEXT_PUBLIC_WS_URL) {
+        return `${process.env.NEXT_PUBLIC_WS_URL}/ws/${roomId}`;
+      }
+      if (typeof window !== 'undefined') {
+        const host = window.location.hostname;
+        const port = window.location.port;
+        if (host === 'localhost' || host === '127.0.0.1' || port === '3000' || port === '3001') {
+          return `ws://${host}:8000/ws/${roomId}`;
+        }
+      }
+      return `wss://nam-bapsang-backend.onrender.com/ws/${roomId}`;
+    };
+
+    const wsUrl = getWebSocketUrl(playlistId);
     let timer: NodeJS.Timeout | null = null;
     let reconnectTimer: NodeJS.Timeout | null = null;
     let isMounted = true;

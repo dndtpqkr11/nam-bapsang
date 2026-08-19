@@ -45,7 +45,7 @@ async def get_mealtime_recommendations(
             "category": pl.category,
             "total_duration_sec": pl.total_duration_sec,
             "fork_count": pl.fork_count,
-            "videos_count": len(pl.items)
+            "videos_count": len(pl.items) if pl.items is not None else 0
         })
 
     df = pd.DataFrame(raw_data)

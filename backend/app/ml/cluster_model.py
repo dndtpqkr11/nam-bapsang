@@ -52,7 +52,10 @@ class MealtimeCurationEngine:
                 df['popularity_score'] = 0.5
 
             # 4. 실시간 가중치 (Freshness Score)
-            df['freshness_score'] = df['is_ott_scraped'].apply(lambda x: 1.0 if x else 0.5)
+            if 'is_ott_scraped' in df.columns:
+                df['freshness_score'] = df['is_ott_scraped'].apply(lambda x: 1.0 if x else 0.5)
+            else:
+                df['freshness_score'] = 0.5
 
             # 최종 추천 산식 스코어
             df['final_score'] = (
@@ -65,6 +68,9 @@ class MealtimeCurationEngine:
             return df.sort_values(by='final_score', ascending=False)
         except Exception:
             return playlists_df
+
+    def filter_playlists_by_mealtime(self, playlists_df: Any) -> Any:
+        return self.rank_playlists(playlists_df)
 
     def build_user_embedding_model(self, num_users: int = 100, num_categories: int = 10, embedding_dim: int = 16):
         """

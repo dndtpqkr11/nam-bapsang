@@ -1,6 +1,18 @@
 import { Playlist, Video } from '@/types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://nam-bapsang-backend.onrender.com/api/v1';
+function getApiBaseUrl(): string {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    const port = window.location.port;
+    if (host === 'localhost' || host === '127.0.0.1' || port === '3000' || port === '3001') {
+      return `http://${host}:8000/api/v1`;
+    }
+  }
+  return 'https://nam-bapsang-backend.onrender.com/api/v1';
+}
 
 function getAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
@@ -18,7 +30,7 @@ function getAuthHeaders(): Record<string, string> {
 
 export async function loginUser(email: string, password: string): Promise<{ access_token: string; user: any }> {
   try {
-    const res = await fetch(`${API_BASE_URL}/auth/login`, {
+    const res = await fetch(`${getApiBaseUrl()}/auth/login`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({ email, password })
@@ -39,7 +51,7 @@ export async function loginUser(email: string, password: string): Promise<{ acce
 
 export async function signupUser(email: string, password: string, nickname: string, masterKey?: string): Promise<{ access_token: string; user: any }> {
   try {
-    const res = await fetch(`${API_BASE_URL}/auth/signup`, {
+    const res = await fetch(`${getApiBaseUrl()}/auth/signup`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({ email, password, nickname, master_key: masterKey })
@@ -63,7 +75,7 @@ export async function fetchPlaylists(targetRuntimeSec: number = 900): Promise<Pl
   const timeoutId = setTimeout(() => controller.abort(), 3000);
 
   try {
-    const res = await fetch(`${API_BASE_URL}/playlists?target_runtime=${targetRuntimeSec}`, {
+    const res = await fetch(`${getApiBaseUrl()}/playlists?target_runtime=${targetRuntimeSec}`, {
       cache: 'no-store',
       headers: getAuthHeaders(),
       signal: controller.signal
@@ -86,7 +98,7 @@ export async function createPlaylist(payload: {
   author_name?: string;
   is_live?: boolean;
 }): Promise<Playlist> {
-  const res = await fetch(`${API_BASE_URL}/playlists`, {
+  const res = await fetch(`${getApiBaseUrl()}/playlists`, {
     method: 'POST',
     headers: getAuthHeaders(),
     body: JSON.stringify({
@@ -116,7 +128,7 @@ export async function createPlaylist(payload: {
 
 export async function deletePlaylist(playlistId: string): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE_URL}/playlists/${playlistId}`, {
+    const res = await fetch(`${getApiBaseUrl()}/playlists/${playlistId}`, {
       method: 'DELETE',
       headers: getAuthHeaders()
     });
@@ -140,7 +152,7 @@ export async function fetchOttRecommendations(
 ): Promise<Playlist[]> {
   try {
     const platformQuery = platforms.join(',');
-    const res = await fetch(`${API_BASE_URL}/ott/recommendations?platforms=${platformQuery}&target_runtime=${targetRuntimeSec}`, {
+    const res = await fetch(`${getApiBaseUrl()}/ott/recommendations?platforms=${platformQuery}&target_runtime=${targetRuntimeSec}`, {
       cache: 'no-store'
     });
     if (!res.ok) return [];
@@ -154,7 +166,7 @@ export async function fetchOttRecommendations(
 
 export async function fetchPlaylistDetail(playlistId: string): Promise<Playlist | null> {
   try {
-    const res = await fetch(`${API_BASE_URL}/playlists/${playlistId}`, { cache: 'no-store' });
+    const res = await fetch(`${getApiBaseUrl()}/playlists/${playlistId}`, { cache: 'no-store' });
     if (!res.ok) return null;
     const json = await res.json();
     return json.data || null;
@@ -165,7 +177,7 @@ export async function fetchPlaylistDetail(playlistId: string): Promise<Playlist 
 }
 
 export async function parseVideoUrl(url: string): Promise<Video> {
-  const res = await fetch(`${API_BASE_URL}/videos/parse`, {
+  const res = await fetch(`${getApiBaseUrl()}/videos/parse`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url })
@@ -179,7 +191,7 @@ export async function parseVideoUrl(url: string): Promise<Video> {
 }
 
 export async function forkPlaylist(playlistId: string): Promise<number> {
-  const res = await fetch(`${API_BASE_URL}/playlists/${playlistId}/fork`, {
+  const res = await fetch(`${getApiBaseUrl()}/playlists/${playlistId}/fork`, {
     method: 'POST'
   });
   if (!res.ok) throw new Error('포크 요청 실패');
@@ -189,7 +201,7 @@ export async function forkPlaylist(playlistId: string): Promise<number> {
 
 export async function fetchYouTubeTrendingVideos(): Promise<any[]> {
   try {
-    const res = await fetch(`${API_BASE_URL}/videos/trending`, { cache: 'no-store' });
+    const res = await fetch(`${getApiBaseUrl()}/videos/trending`, { cache: 'no-store' });
     if (!res.ok) return [];
     const json = await res.json();
     return json.data || [];
@@ -201,7 +213,7 @@ export async function fetchYouTubeTrendingVideos(): Promise<any[]> {
 
 export async function searchYouTubeVideos(query: string): Promise<any[]> {
   try {
-    const res = await fetch(`${API_BASE_URL}/videos/search?q=${encodeURIComponent(query)}`, { cache: 'no-store' });
+    const res = await fetch(`${getApiBaseUrl()}/videos/search?q=${encodeURIComponent(query)}`, { cache: 'no-store' });
     if (!res.ok) return [];
     const json = await res.json();
     return json.data || [];

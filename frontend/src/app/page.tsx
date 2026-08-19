@@ -1180,6 +1180,7 @@ export default function HomePage() {
         hostNickname={playingVideoState?.hostNickname}
         onDeleteLiveRoom={(id) => handleDeleteLiveRoom(id)}
         onClose={() => setPlayingVideoState(null)}
+        onRoomDeleted={() => setPlayingVideoState(null)}
       />
 
       {/* OTT Connect Modal triggered from unlinked prompt */}

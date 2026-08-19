@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Clock, ThumbsUp, Users, Share2, Play, Sparkles, CheckCircle2 } from 'lucide-react';
 import { Playlist, Video } from '@/types';
-import { fetchPlaylistDetail, forkPlaylist } from '@/lib/api';
+import { fetchPlaylistDetail, forkPlaylist, deletePlaylist } from '@/lib/api';
 import { RealtimeBadge } from '@/components/RealtimeBadge';
 import { VideoItem } from '@/components/VideoItem';
 import { LiveChatDrawer } from '@/components/LiveChatDrawer';
@@ -119,7 +119,23 @@ export default function PlaylistDetailPage() {
   if (!playlist) return null;
 
   // 실시간 합석 반찬 여부 식별 (live- 로 시작하는 실시간 반찬이면 채팅 켜기)
-  const isLivePlaylist = playlist.id.startsWith('live-');
+  const isLivePlaylist = playlist.id.startsWith('live-') || playlist.id.startsWith('pl-live-');
+
+  const myNicknameStr = (typeof window !== 'undefined' && (localStorage.getItem('user_nickname') || (localStorage.getItem('user') && JSON.parse(localStorage.getItem('user')!).nickname))) || '독고다이';
+  const myHostRoomIds: string[] = (typeof window !== 'undefined' && localStorage.getItem('my_host_room_ids'))
+    ? (() => { try { return JSON.parse(localStorage.getItem('my_host_room_ids')!); } catch { return []; } })()
+    : [];
+  const isHostUser = isLivePlaylist && (
+    playlist.author === myNicknameStr || 
+    playlist.author === `${myNicknameStr} (방장)` || 
+    playlist.author_id === 'u-me' ||
+    myHostRoomIds.includes(playlist.id)
+  );
+
+  const handleDeleteLiveRoom = async (id: string) => {
+    try { await deletePlaylist(id); } catch {}
+    router.push('/');
+  };
 
   return (
     <div className="min-h-screen bg-[#080b11] text-gray-100 pb-20">
@@ -127,7 +143,14 @@ export default function PlaylistDetailPage() {
         video={playingVideo}
         enableChat={isLivePlaylist}
         playlistId={playlist.id}
+        isHost={isHostUser}
+        hostNickname={playlist.author}
+        onDeleteLiveRoom={handleDeleteLiveRoom}
         onClose={() => setPlayingVideo(null)}
+        onRoomDeleted={() => {
+          setPlayingVideo(null);
+          router.push('/');
+        }}
       />
 
       {toastMessage && (
@@ -246,6 +269,12 @@ export default function PlaylistDetailPage() {
             <LiveChatDrawer
               playlistId={playlist.id}
               playlistTitle={playlist.title}
+              isHost={isHostUser}
+              hostNickname={playlist.author}
+              onDeleteLiveRoom={handleDeleteLiveRoom}
+              onRoomDeleted={() => {
+                router.push('/');
+              }}
             />
           </div>
         )}

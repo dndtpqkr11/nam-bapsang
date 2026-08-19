@@ -22,6 +22,7 @@ interface LiveChatDrawerProps {
   initialWatchers?: number;
   onHostVideoChange?: (video: Video, elapsedSeconds?: number) => void;
   onDeleteLiveRoom?: (playlistId: string) => void;
+  onRoomDeleted?: () => void;
   isHost?: boolean;
   hostNickname?: string;
 }
@@ -48,6 +49,7 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
   initialWatchers = 38,
   onHostVideoChange,
   onDeleteLiveRoom,
+  onRoomDeleted,
   isHost = false,
   hostNickname = '독고다이'
 }) => {
@@ -89,11 +91,13 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
   const isHostRef = useRef(isHost);
   const onHostVideoChangeRef = useRef(onHostVideoChange);
   const baseWatchersRef = useRef(baseWatchers);
+  const onRoomDeletedRef = useRef(onRoomDeleted);
 
   useEffect(() => { nicknameRef.current = nickname; }, [nickname]);
   useEffect(() => { isHostRef.current = isHost; }, [isHost]);
   useEffect(() => { onHostVideoChangeRef.current = onHostVideoChange; }, [onHostVideoChange]);
   useEffect(() => { baseWatchersRef.current = baseWatchers; }, [baseWatchers]);
+  useEffect(() => { onRoomDeletedRef.current = onRoomDeleted; }, [onRoomDeleted]);
 
   useEffect(() => {
     if (chatScrollRef.current) {
@@ -170,7 +174,8 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
       }
       if (typeof window !== 'undefined') {
         const host = window.location.hostname;
-        if (host === 'localhost' || host === '127.0.0.1') {
+        const port = window.location.port;
+        if (host === 'localhost' || host === '127.0.0.1' || port === '3000' || port === '3001') {
           return `ws://${host}:8000/ws/${roomId}`;
         }
       }
@@ -201,6 +206,11 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
           const data = JSON.parse(event.data);
           if (data.type === 'PRESENCE_UPDATE' && typeof data.active_watchers === 'number') {
             setActiveWatchers(data.active_watchers);
+          } else if (data.type === 'ROOM_DELETED') {
+            alert(data.message || '👑 라이브 밥상방이 삭제되었습니다.');
+            if (onRoomDeletedRef.current) {
+              onRoomDeletedRef.current();
+            }
           } else if (data.type === 'CHAT_HISTORY' && Array.isArray(data.history)) {
             const serverMsgs: ChatMessage[] = data.history.map((item: any) => ({
               id: item.msg_id || `m-server-${Math.random()}`,
@@ -429,6 +439,14 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
                 <button
                   onClick={() => {
                     if (window.confirm('정말 이 라이브 밥상방을 삭제하시겠습니까?')) {
+                      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                        try {
+                          wsRef.current.send(JSON.stringify({
+                            type: 'DELETE_ROOM',
+                            playlist_id: playlistId
+                          }));
+                        } catch {}
+                      }
                       onDeleteLiveRoom(playlistId);
                     }
                   }}

@@ -5,6 +5,7 @@ from sqlalchemy import select
 from app.core.database import get_db
 from app.models.video import Video as VideoModel
 from app.services.youtube import YouTubeMetadataService
+from app.services.deeplink import DeepLinkRouter
 
 router = APIRouter()
 yt_service = YouTubeMetadataService()
