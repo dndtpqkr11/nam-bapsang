@@ -12,6 +12,7 @@ class ConnectionManager:
         self.active_connections: Dict[str, Set[WebSocket]] = {}
         self.room_hosts: Dict[str, str] = {} # playlist_id -> host_session_id
         self.room_chat_history: Dict[str, List[dict]] = {} # playlist_id -> List of recent 50 chat messages
+        self.room_video_state: Dict[str, dict] = {} # playlist_id -> { "video": dict, "started_at": float }
 
     async def connect(self, playlist_id: str, websocket: WebSocket) -> str:
         await websocket.accept()
@@ -40,6 +41,21 @@ class ConnectionManager:
                     "type": "CHAT_HISTORY",
                     "playlist_id": playlist_id,
                     "history": self.room_chat_history[playlist_id]
+                })
+            except Exception:
+                pass
+
+        # Send current video playback state & elapsed time to newly connected user for 100% time sync
+        if playlist_id in self.room_video_state and self.room_video_state[playlist_id]:
+            try:
+                st = self.room_video_state[playlist_id]
+                import time
+                elapsed = max(0, int(time.time() - st.get("started_at", time.time())))
+                await websocket.send_json({
+                    "type": "SYNC_VIDEO_STATE",
+                    "playlist_id": playlist_id,
+                    "video": st.get("video"),
+                    "elapsed_seconds": elapsed
                 })
             except Exception:
                 pass
@@ -141,12 +157,19 @@ async def websocket_presence(websocket: WebSocket, playlist_id: str):
                         await manager.broadcast_payload(playlist_id, chat_event)
 
                     elif msg_type == "HOST_CHANGE_VIDEO":
-                        # 방장에 의한 영상 교체 동기화 보로드캐스트
+                        # 방장에 의한 영상 교체 동기화 및 시작 시각 타임스탬프 기록
                         video_payload = payload.get("video", {})
+                        import time
+                        manager.room_video_state[playlist_id] = {
+                            "video": video_payload,
+                            "started_at": time.time()
+                        }
+
                         sync_event = {
                             "type": "HOST_CHANGE_VIDEO",
                             "playlist_id": playlist_id,
                             "video": video_payload,
+                            "elapsed_seconds": 0,
                             "host_nickname": payload.get("host_nickname", "👑 방장"),
                             "system_message": f"👑 {payload.get('host_nickname', '방장')} 님이 실시간 반찬 영상을 교체하셨습니다!"
                         }

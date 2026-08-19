@@ -20,7 +20,7 @@ interface LiveChatDrawerProps {
   playlistId: string;
   playlistTitle?: string;
   initialWatchers?: number;
-  onHostVideoChange?: (video: Video) => void;
+  onHostVideoChange?: (video: Video, elapsedSeconds?: number) => void;
   onDeleteLiveRoom?: (playlistId: string) => void;
   isHost?: boolean;
   hostNickname?: string;
@@ -233,9 +233,13 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
               };
               setMessages((prev) => [...prev, newMsg]);
             }
+          } else if (data.type === 'SYNC_VIDEO_STATE') {
+            if (data.video && onHostVideoChangeRef.current) {
+              onHostVideoChangeRef.current(data.video, data.elapsed_seconds || 0);
+            }
           } else if (data.type === 'HOST_CHANGE_VIDEO') {
             if (data.video && onHostVideoChangeRef.current) {
-              onHostVideoChangeRef.current(data.video);
+              onHostVideoChangeRef.current(data.video, data.elapsed_seconds || 0);
             }
             if (data.system_message) {
               const sysMsg: ChatMessage = {

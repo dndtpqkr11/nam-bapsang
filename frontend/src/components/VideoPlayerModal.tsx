@@ -37,10 +37,17 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   onDeleteLiveRoom
 }) => {
   const [currentVideo, setCurrentVideo] = useState<Video | null>(video);
+  const [startSeconds, setStartSeconds] = useState<number>(0);
 
   useEffect(() => {
     setCurrentVideo(video);
+    setStartSeconds(0);
   }, [video?.video_id, video?.id, video]);
+
+  const handleVideoChange = (newVid: Video, elapsed?: number) => {
+    setCurrentVideo(newVid);
+    setStartSeconds(typeof elapsed === 'number' && elapsed > 0 ? elapsed : 0);
+  };
 
   const activeVid = currentVideo || video;
 
@@ -135,8 +142,8 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             {isYoutube ? (
               <div className="relative aspect-video rounded-2xl overflow-hidden bg-black border border-white/10 shadow-2xl">
                 <iframe
-                  key={embedYtId}
-                  src={`https://www.youtube.com/embed/${embedYtId}?autoplay=1&enablejsapi=1`}
+                  key={`${embedYtId}-${startSeconds}`}
+                  src={`https://www.youtube.com/embed/${embedYtId}?autoplay=1&enablejsapi=1${startSeconds > 0 ? `&start=${startSeconds}` : ''}`}
                   title={activeVid.title}
                   className="w-full h-full border-0"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -213,7 +220,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                   initialWatchers={initialWatchers}
                   isHost={isHost}
                   hostNickname={hostNickname || activeVid.channel_title}
-                  onHostVideoChange={(newVid) => setCurrentVideo(newVid)}
+                  onHostVideoChange={(newVid, elapsed) => handleVideoChange(newVid, elapsed)}
                   onDeleteLiveRoom={onDeleteLiveRoom}
                 />
               </div>
