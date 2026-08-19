@@ -95,15 +95,8 @@ class ConnectionManager:
         await self.broadcast_count(playlist_id)
 
     async def get_watcher_count(self, playlist_id: str) -> int:
-        try:
-            from app.core.redis import get_redis_client
-            r = await get_redis_client()
-            redis_count = await r.scard(f"presence:{playlist_id}")
-            if redis_count > 0:
-                return redis_count
-        except Exception:
-            pass
-        return len(self.room_client_sockets.get(playlist_id, {}))
+        count = len(self.room_client_sockets.get(playlist_id, {}))
+        return max(1, count) if playlist_id in self.active_connections else count
 
     async def broadcast_count(self, playlist_id: str):
         count = await self.get_watcher_count(playlist_id)

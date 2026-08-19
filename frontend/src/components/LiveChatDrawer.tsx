@@ -92,6 +92,7 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
   const onHostVideoChangeRef = useRef(onHostVideoChange);
   const baseWatchersRef = useRef(baseWatchers);
   const onRoomDeletedRef = useRef(onRoomDeleted);
+  const isDeletingRef = useRef<boolean>(false);
 
   useEffect(() => { nicknameRef.current = nickname; }, [nickname]);
   useEffect(() => { isHostRef.current = isHost; }, [isHost]);
@@ -110,7 +111,7 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
   }, [messages]);
 
   useEffect(() => {
-    setActiveWatchers(baseWatchers + 1);
+    setActiveWatchers(baseWatchers || 1);
   }, [baseWatchers]);
 
   useEffect(() => {
@@ -210,7 +211,9 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
             if (onRoomDeletedRef.current) {
               onRoomDeletedRef.current();
             }
-            alert(data.message || '👑 방장에 의해 라이브 밥상방이 삭제되었습니다.');
+            if (!isDeletingRef.current) {
+              alert(data.message || '👑 방장에 의해 라이브 밥상방이 삭제되었습니다.');
+            }
           } else if (data.type === 'CHAT_HISTORY' && Array.isArray(data.history)) {
             const serverMsgs: ChatMessage[] = data.history.map((item: any) => ({
               id: item.msg_id || `m-server-${Math.random()}`,
@@ -439,6 +442,7 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
                 <button
                   onClick={() => {
                     if (window.confirm('정말 이 라이브 밥상방을 삭제하시겠습니까?')) {
+                      isDeletingRef.current = true;
                       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
                         try {
                           wsRef.current.send(JSON.stringify({
