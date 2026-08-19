@@ -224,10 +224,17 @@ async def create_playlist(
 @router.get("/{playlist_id}")
 async def get_playlist_detail(playlist_id: str, db: AsyncSession = Depends(get_db)):
     """
-    플레이리스트 상세 정보 조회
+    플레이리스트 상세 정보 조회 (인메모리 SHARED_LIVE_ROOMS 및 PostgreSQL DB 지원)
     """
+    # 1. 인메모리 라이브 방 조회
+    target_room = next((r for r in SHARED_LIVE_ROOMS if r["id"] == playlist_id), None)
+    if target_room:
+        return {"success": True, "data": target_room}
+
+    # 2. DB 플레이리스트 조회
     try:
-        clean_id = int(playlist_id.replace("pl-", ""))
+        clean_id_str = playlist_id.replace("pl-live-", "").replace("pl-my-", "").replace("pl-", "").replace("fork-", "")
+        clean_id = int(clean_id_str)
     except ValueError:
         raise HTTPException(status_code=400, detail="유효하지 않은 플레이리스트 ID입니다.")
 
@@ -269,10 +276,20 @@ async def get_playlist_detail(playlist_id: str, db: AsyncSession = Depends(get_d
 @router.post("/{playlist_id}/fork")
 async def fork_playlist(playlist_id: str, db: AsyncSession = Depends(get_db)):
     """
-    타 유저의 플레이리스트 원터치 포크 (PostgreSQL DB fork_count 업데이트 및 복제 생성)
+    타 유저의 플레이리스트 원터치 포크 (인메모리 및 PostgreSQL DB 지원)
     """
+    target_room = next((r for r in SHARED_LIVE_ROOMS if r["id"] == playlist_id), None)
+    if target_room:
+        target_room["fork_count"] = target_room.get("fork_count", 0) + 1
+        return {
+            "success": True,
+            "message": "라이브 밥상방 추천수가 증가되었습니다!",
+            "original_fork_count": target_room["fork_count"]
+        }
+
     try:
-        clean_id = int(playlist_id.replace("pl-", "").replace("fork-", ""))
+        clean_id_str = playlist_id.replace("pl-live-", "").replace("pl-my-", "").replace("pl-", "").replace("fork-", "")
+        clean_id = int(clean_id_str)
     except ValueError:
         raise HTTPException(status_code=400, detail="유효하지 않은 플레이리스트 ID입니다.")
 
