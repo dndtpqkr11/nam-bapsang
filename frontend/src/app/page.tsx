@@ -659,15 +659,27 @@ export default function HomePage() {
         const sharedLive = data.filter((pl) => (pl as any).is_live || pl.id.startsWith('pl-live-'));
         setUserLiveRooms((prev) => {
           const combinedMap = new Map<string, Playlist>();
-          [...sharedLive, ...localLive, ...prev].forEach((item) => combinedMap.set(item.id, item));
+          [...sharedLive, ...localLive, ...prev].forEach((item) => combinedMap.set(String(item.id), item));
           return Array.from(combinedMap.values());
         });
-        setPlaylists([...localCreated, ...data]);
+        setPlaylists(() => {
+          const combinedMap = new Map<string, Playlist>();
+          [...localCreated, ...data].forEach((pl) => combinedMap.set(String(pl.id), pl));
+          return Array.from(combinedMap.values());
+        });
       } else {
-        setPlaylists([...localCreated, ...FALLBACK_PLAYLISTS]);
+        setPlaylists(() => {
+          const combinedMap = new Map<string, Playlist>();
+          [...localCreated, ...FALLBACK_PLAYLISTS].forEach((pl) => combinedMap.set(String(pl.id), pl));
+          return Array.from(combinedMap.values());
+        });
       }
     } catch {
-      setPlaylists([...localCreated, ...FALLBACK_PLAYLISTS]);
+      setPlaylists(() => {
+        const combinedMap = new Map<string, Playlist>();
+        [...localCreated, ...FALLBACK_PLAYLISTS].forEach((pl) => combinedMap.set(String(pl.id), pl));
+        return Array.from(combinedMap.values());
+      });
     } finally {
       setLoading(false);
     }
@@ -1087,16 +1099,14 @@ export default function HomePage() {
     }
   };
 
-  // Deduplicate playlists by video_id or id to ensure zero duplicates across sections
-  const seenVideoKeys = new Set<string>();
+  // Deduplicate playlists by String(pl.id) to ensure zero duplicates across sections
+  const seenIds = new Set<string>();
   const deduplicatedPlaylists: Playlist[] = [];
 
   for (const pl of [...playlists, ...ottScrapedItems]) {
-    const key = (pl.videos && pl.videos[0] && pl.videos[0].video_id) 
-      ? `${pl.videos[0].platform}-${pl.videos[0].video_id}` 
-      : pl.id;
-    if (!seenVideoKeys.has(key)) {
-      seenVideoKeys.add(key);
+    const idKey = String(pl.id);
+    if (!seenIds.has(idKey)) {
+      seenIds.add(idKey);
       deduplicatedPlaylists.push(pl);
     }
   }
@@ -1111,13 +1121,23 @@ export default function HomePage() {
   // 1. Live Co-watching Playlists (사용자가 직접 개설한 라이브 방만 표출)
   const serverUserLiveRooms = allPlaylists.filter((pl) => pl.is_live);
   const liveRoomMap = new Map<string, Playlist>();
-  [...userLiveRooms, ...serverUserLiveRooms].forEach(room => liveRoomMap.set(room.id, room));
+  [...userLiveRooms, ...serverUserLiveRooms].forEach(room => liveRoomMap.set(String(room.id), room));
   const liveCowatchingPlaylists = Array.from(liveRoomMap.values());
 
-  // 2. Playlists Created by Other Users (통합 남이 차린 반찬 - 식사시간 탭 & OTT 탭 필터링 적용)
+  // 2. Playlists Created by Other Users (통합 남이 차린 반찬 - 내가 만든 밥상/보관함 카드는 중복 제거)
+  const myNicknameStr = (typeof window !== 'undefined' && (localStorage.getItem('user_nickname') || (localStorage.getItem('user') && JSON.parse(localStorage.getItem('user')!).nickname))) || '독고다이';
+  const myCreatedIdSet = new Set([
+    ...myCreatedPlaylists.map((p) => String(p.id)),
+    ...userLiveRooms.map((p) => String(p.id))
+  ]);
+
   let otherUsersPlaylists = isPreviewingAsOtherUser
     ? baseFiltered
-    : baseFiltered.filter((pl) => pl.author_id !== 'u-me' && !pl.id.startsWith('pl-my-'));
+    : baseFiltered.filter((pl) => {
+        const idStr = String(pl.id);
+        const isMyAuthor = pl.author_id === 'u-me' || (pl.author && pl.author === myNicknameStr);
+        return !isMyAuthor && !idStr.startsWith('pl-my-') && !myCreatedIdSet.has(idStr);
+      });
 
   if (selectedDurationTab === '5min') {
     otherUsersPlaylists = otherUsersPlaylists.filter((pl) => (pl.total_duration_sec || 0) <= 450);
