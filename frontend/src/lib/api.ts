@@ -17,10 +17,10 @@ function getApiBaseUrl(): string {
 export function getClientSessionId(): string {
   if (typeof window === 'undefined') return 'client-ssr';
   try {
-    let id = sessionStorage.getItem('app_client_session_id');
+    let id = localStorage.getItem('app_user_client_id');
     if (!id) {
       id = `client-${Math.random().toString(36).substring(2, 9)}-${Date.now()}`;
-      sessionStorage.setItem('app_client_session_id', id);
+      localStorage.setItem('app_user_client_id', id);
     }
     return id;
   } catch {

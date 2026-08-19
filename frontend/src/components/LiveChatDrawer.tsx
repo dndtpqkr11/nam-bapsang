@@ -69,7 +69,7 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
   ]);
   const [inputText, setInputText] = useState<string>('');
   const [nickname, setNickname] = useState<string>(isHost ? '나(방장)' : '나(식사중)');
-  const [activeWatchers, setActiveWatchers] = useState<number>(baseWatchers + 1);
+  const [activeWatchers, setActiveWatchers] = useState<number>(initialWatchers || 1);
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [showHostControlPanel, setShowHostControlPanel] = useState<boolean>(false);
   const [customVideoUrlInput, setCustomVideoUrlInput] = useState<string>('');

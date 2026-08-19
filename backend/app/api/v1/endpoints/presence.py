@@ -39,6 +39,7 @@ class ConnectionManager:
             from app.core.redis import get_redis_client
             r = await get_redis_client()
             await r.sadd(f"presence:{playlist_id}", client_id)
+            await r.expire(f"presence:{playlist_id}", 3600)
         except Exception:
             pass
 
