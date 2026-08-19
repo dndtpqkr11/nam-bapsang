@@ -166,36 +166,32 @@ export const PlaylistCard: React.FC<PlaylistCardProps> = ({
   const durTag = getDurationTag();
 
   return (
-    <div className="glass-panel rounded-2xl p-5 border border-white/10 hover:border-orange-500/50 hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 group relative">
-      {/* Header Info */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-2 flex-wrap">
-            {showLiveBadge ? (
+    <div className={`glass-panel rounded-2xl p-5 border transition-all duration-300 group relative ${
+      showLiveBadge
+        ? 'border-rose-500/30 hover:border-rose-500/60 bg-gradient-to-br from-rose-950/20 via-black/40 to-amber-950/20 shadow-lg shadow-rose-950/20'
+        : 'border-white/10 hover:border-orange-500/50 hover:shadow-2xl hover:shadow-orange-500/10'
+    }`}>
+      {/* Top Bar: Badges + Action Buttons */}
+      <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+        {/* Badges Area */}
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          {showLiveBadge ? (
+            <>
               <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-inner flex items-center gap-1">
-                <Crown className="w-3.5 h-3.5 text-amber-400" />
-                <span>👑 방장: {playlist.author || '독고다이'}</span>
+                <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="truncate">방장: {playlist.author || '독고다이'}</span>
               </span>
-            ) : (
-              <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border shadow-inner ${durTag.color}`}>
-                {durTag.text}
-              </span>
-            )}
-            {showLiveBadge && (
               <RealtimeBadge playlistId={playlist.id} initialWatchers={playlist.active_watchers || 1} isJoined={isJoined} />
-            )}
-          </div>
-          
-          <Link href={`/playlists/${playlist.id}`} className="group-hover:text-orange-300 transition-colors">
-            <h3 className="text-lg font-bold text-white tracking-tight leading-snug flex items-center gap-1.5">
-              <span>{playlist.title}</span>
-              <ExternalLink className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-orange-400 shrink-0" />
-            </h3>
-          </Link>
+            </>
+          ) : (
+            <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border shadow-inner ${durTag.color}`}>
+              {durTag.text}
+            </span>
+          )}
         </div>
 
         {/* Action Buttons (Share + Edit + Delete + Recommend) */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0 ml-auto">
           <button
             onClick={handleShareClick}
             title="상대방에게 반찬 공유하기"
@@ -234,7 +230,7 @@ export const PlaylistCard: React.FC<PlaylistCardProps> = ({
 
           <button
             onClick={handleRecommendClick}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 active:scale-95 cursor-pointer ${
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold transition-all duration-200 active:scale-95 cursor-pointer ${
               recommended
                 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-md shadow-emerald-500/10'
                 : 'bg-white/10 hover:bg-orange-600 hover:text-white text-gray-300 shadow-md hover:shadow-orange-600/30'
@@ -242,17 +238,25 @@ export const PlaylistCard: React.FC<PlaylistCardProps> = ({
             title={recommended ? '클릭 시 추천 취소' : '이 반찬 추천하기'}
           >
             <ThumbsUp className={`w-3.5 h-3.5 ${recommended ? 'text-emerald-400' : ''}`} />
-            <span>{recommended ? '추천함' : '추천'}</span>
-            <span className="ml-0.5 opacity-80">({recommendCount})</span>
+            <span>{recommended ? '추천' : '추천'}</span>
+            <span className="opacity-80">({recommendCount})</span>
           </button>
         </div>
       </div>
 
+      {/* Full-width Title Row */}
+      <Link href={`/playlists/${playlist.id}`} className="group-hover:text-orange-300 transition-colors block mb-3">
+        <h3 className="text-base sm:text-lg font-bold text-white tracking-tight leading-snug flex items-center gap-1.5">
+          <span>{playlist.title}</span>
+          <ExternalLink className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-orange-400 shrink-0" />
+        </h3>
+      </Link>
+
       {/* Metadata Bar */}
-      <div className="flex items-center justify-between mt-4 py-2 px-3 rounded-xl bg-white/5 text-xs text-gray-300">
+      <div className="flex items-center justify-between py-2 px-3 rounded-xl bg-white/5 text-xs text-gray-300">
         <div className="flex items-center gap-1 text-gray-400">
-          <User className="w-3.5 h-3.5 text-orange-400" />
-          <span className="font-medium text-white">{playlist.author}</span>
+          <User className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+          <span className="font-medium text-white truncate max-w-[120px]">{playlist.author || '방장'}</span>
         </div>
         <div className="flex items-center gap-3">
           <span className="text-gray-400 font-medium">
