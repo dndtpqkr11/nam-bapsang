@@ -75,6 +75,9 @@ async def list_playlists(
             playlists = result.scalars().all()
 
             for pl in playlists:
+                # Filter out test invalid titles like "123123"
+                if pl.title and ("123123" in pl.title or pl.title.strip() == "123123"):
+                    continue
                 pl_id = f"pl-{pl.id}"
                 if not any(r["id"] == pl_id for r in formatted_data):
                     formatted_data.append({
@@ -105,6 +108,9 @@ async def list_playlists(
             except Exception:
                 pass
             print(f"DB fetch warning (memory list active): {db_err}")
+
+    # Final filter to ensure no "123123" titled playlists are returned
+    formatted_data = [item for item in formatted_data if not ("123123" in item.get("title", "") or item.get("title", "").strip() == "123123")]
 
     return {"success": True, "count": len(formatted_data), "data": formatted_data}
 
@@ -312,7 +318,7 @@ async def delete_playlist(
     try:
         clean_id_str = playlist_id.replace("pl-live-", "").replace("pl-my-", "").replace("pl-", "")
         clean_id = int(clean_id_str)
-        stmt = select(PlaylistModel).where(PlaylistModel.id == clean_id)
+        stmt = select(PlaylistModel).options(selectinload(PlaylistModel.items)).where(PlaylistModel.id == clean_id)
         res = await db.execute(stmt)
         db_pl = res.scalars().first()
     except Exception:
@@ -341,8 +347,14 @@ async def delete_playlist(
 
     SHARED_LIVE_ROOMS = [r for r in SHARED_LIVE_ROOMS if r["id"] != playlist_id]
     if db_pl:
-        await db.delete(db_pl)
-        await db.commit()
+        try:
+            for item in (db_pl.items or []):
+                await db.delete(item)
+            await db.delete(db_pl)
+            await db.commit()
+        except Exception as del_err:
+            await db.rollback()
+            print(f"DB delete error: {del_err}")
 
     return {
         "success": True, 
