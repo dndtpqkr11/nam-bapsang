@@ -648,6 +648,25 @@ export default function HomePage() {
     return [];
   };
 
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'user_live_rooms') {
+        try {
+          const fresh = e.newValue ? JSON.parse(e.newValue) : [];
+          setUserLiveRooms(fresh);
+        } catch {}
+      }
+      if (e.key === 'my_created_playlists') {
+        try {
+          const fresh = e.newValue ? JSON.parse(e.newValue) : [];
+          setMyCreatedPlaylists(fresh);
+        } catch {}
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
   const loadPlaylists = async () => {
     setLoading(true);
     const localCreated = syncLocalCreated();
@@ -657,17 +676,27 @@ export default function HomePage() {
       if (data && data.length > 0) {
         // Extract shared live rooms created by any user from backend
         const sharedLive = data.filter((pl) => (pl as any).is_live || pl.id.startsWith('pl-live-'));
-        setUserLiveRooms((prev) => {
-          const combinedMap = new Map<string, Playlist>();
-          [...sharedLive, ...localLive, ...prev].forEach((item) => combinedMap.set(String(item.id), item));
-          return Array.from(combinedMap.values());
-        });
+        const sharedLiveMap = new Map<string, Playlist>();
+        sharedLive.forEach((item) => sharedLiveMap.set(String(item.id), item));
+
+        const localLiveMap = new Map<string, Playlist>();
+        localLive.filter(item => item.id.startsWith('pl-live-user-')).forEach(item => localLiveMap.set(String(item.id), item));
+
+        const allKeys = Array.from(sharedLiveMap.keys()).concat(Array.from(localLiveMap.keys()));
+        const updatedLiveRooms = Array.from(new Set(allKeys))
+          .map(id => sharedLiveMap.get(id) || localLiveMap.get(id)!)
+          .filter(Boolean);
+
+        setUserLiveRooms(updatedLiveRooms);
         setPlaylists(() => {
           const combinedMap = new Map<string, Playlist>();
           [...localCreated, ...data].forEach((pl) => combinedMap.set(String(pl.id), pl));
           return Array.from(combinedMap.values());
         });
       } else {
+        const localLiveMap = new Map<string, Playlist>();
+        localLive.filter(item => item.id.startsWith('pl-live-user-')).forEach(item => localLiveMap.set(String(item.id), item));
+        setUserLiveRooms(Array.from(localLiveMap.values()));
         setPlaylists(() => {
           const combinedMap = new Map<string, Playlist>();
           [...localCreated, ...FALLBACK_PLAYLISTS].forEach((pl) => combinedMap.set(String(pl.id), pl));
@@ -675,6 +704,9 @@ export default function HomePage() {
         });
       }
     } catch {
+      const localLiveMap = new Map<string, Playlist>();
+      localLive.filter(item => item.id.startsWith('pl-live-user-')).forEach(item => localLiveMap.set(String(item.id), item));
+      setUserLiveRooms(Array.from(localLiveMap.values()));
       setPlaylists(() => {
         const combinedMap = new Map<string, Playlist>();
         [...localCreated, ...FALLBACK_PLAYLISTS].forEach((pl) => combinedMap.set(String(pl.id), pl));
@@ -1119,10 +1151,7 @@ export default function HomePage() {
   });
 
   // 1. Live Co-watching Playlists (사용자가 직접 개설한 라이브 방만 표출)
-  const serverUserLiveRooms = allPlaylists.filter((pl) => pl.is_live);
-  const liveRoomMap = new Map<string, Playlist>();
-  [...userLiveRooms, ...serverUserLiveRooms].forEach(room => liveRoomMap.set(String(room.id), room));
-  const liveCowatchingPlaylists = Array.from(liveRoomMap.values());
+  const liveCowatchingPlaylists = userLiveRooms;
 
   // 2. Playlists Created by Other Users (통합 남이 차린 반찬 - 내가 만든 밥상/보관함 카드는 중복 제거)
   const myNicknameStr = (typeof window !== 'undefined' && (localStorage.getItem('user_nickname') || (localStorage.getItem('user') && JSON.parse(localStorage.getItem('user')!).nickname))) || '독고다이';
