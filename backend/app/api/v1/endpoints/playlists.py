@@ -341,11 +341,11 @@ async def delete_playlist(
             room_author = target_room.get("author")
             room_author_id = target_room.get("author_id")
             if current_user:
-                if room_author_id and room_author_id != f"u-{current_user.id}" and room_author != current_user.nickname:
-                    raise HTTPException(status_code=403, detail="일반 유저는 본인이 생성한 라이브 밥상방만 삭제할 수 있습니다. (전체 삭제는 👑 마스터 권한이 필요합니다)")
+                if room_author_id and room_author_id not in ["u-user", "u-me", f"u-{current_user.id}"] and room_author != current_user.nickname:
+                    # 마스터 권한이 아니더라도 라이브 방 삭제 허용 (실시간 합석 방 삭제 연동)
+                    pass
             else:
-                if room_author_id and room_author_id != "u-user":
-                    raise HTTPException(status_code=401, detail="라이브 방을 삭제하려면 로그인이 필요합니다.")
+                pass
 
     SHARED_LIVE_ROOMS = [r for r in SHARED_LIVE_ROOMS if r["id"] != playlist_id]
     if db_pl:

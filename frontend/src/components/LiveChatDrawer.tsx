@@ -207,10 +207,10 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
           if (data.type === 'PRESENCE_UPDATE' && typeof data.active_watchers === 'number') {
             setActiveWatchers(data.active_watchers);
           } else if (data.type === 'ROOM_DELETED') {
-            alert(data.message || '👑 라이브 밥상방이 삭제되었습니다.');
             if (onRoomDeletedRef.current) {
               onRoomDeletedRef.current();
             }
+            alert(data.message || '👑 방장에 의해 라이브 밥상방이 삭제되었습니다.');
           } else if (data.type === 'CHAT_HISTORY' && Array.isArray(data.history)) {
             const serverMsgs: ChatMessage[] = data.history.map((item: any) => ({
               id: item.msg_id || `m-server-${Math.random()}`,
