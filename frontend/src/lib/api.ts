@@ -199,3 +199,15 @@ export async function fetchYouTubeTrendingVideos(): Promise<any[]> {
   }
 }
 
+export async function searchYouTubeVideos(query: string): Promise<any[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/videos/search?q=${encodeURIComponent(query)}`, { cache: 'no-store' });
+    if (!res.ok) return [];
+    const json = await res.json();
+    return json.data || [];
+  } catch (err) {
+    console.warn('YouTube search API failed:', err);
+    return [];
+  }
+}
+

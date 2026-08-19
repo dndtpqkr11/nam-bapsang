@@ -1,17 +1,24 @@
-from fastapi import APIRouter, HTTPException, Header, Depends
+from fastapi import APIRouter, HTTPException, Header, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.core.database import get_db
 from app.models.video import Video as VideoModel
 from app.services.youtube import YouTubeMetadataService
-from app.services.deeplink import DeepLinkRouter
 
 router = APIRouter()
 yt_service = YouTubeMetadataService()
 
 class VideoParseRequest(BaseModel):
     url: str
+
+@router.get("/search")
+async def search_youtube(q: str = Query(..., description="유튜브 검색 키워드 또는 URL")):
+    """
+    유튜브 검색창 키워드 연동 및 영상 긁어오기 API
+    """
+    items = await yt_service.search_youtube_videos(q)
+    return {"success": True, "count": len(items), "data": items}
 
 @router.get("/trending")
 async def get_youtube_trending():

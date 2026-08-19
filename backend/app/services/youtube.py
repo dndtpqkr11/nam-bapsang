@@ -239,3 +239,75 @@ class YouTubeMetadataService:
         YouTubeMetadataService._trending_cache = results
         YouTubeMetadataService._trending_last_fetched = now
         return results
+
+    async def search_youtube_videos(self, query: str, limit: int = 6) -> List[Dict[str, Any]]:
+        """유튜브 키워드 직접 검색 (yt-dlp 또는 Invidious 파이프라인)"""
+        query = query.strip()
+        if not query:
+            return []
+
+        video_id = self.extract_video_id(query)
+        if video_id:
+            try:
+                single_meta = await self.get_video_metadata(query)
+                return [single_meta]
+            except Exception:
+                pass
+
+        results = []
+        if HAS_YTDLP:
+            try:
+                ydl_opts = {
+                    'quiet': True,
+                    'no_warnings': True,
+                    'skip_download': True,
+                    'socket_timeout': 5
+                }
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
+                    entries = info.get('entries', []) or []
+                    for entry in entries:
+                        if not entry:
+                            continue
+                        vid_id = entry.get('id')
+                        if vid_id and len(vid_id) == 11:
+                            dur = int(entry.get('duration') or 300)
+                            thumb = entry.get('thumbnail') or f"https://img.youtube.com/vi/{vid_id}/hqdefault.jpg"
+                            results.append({
+                                "platform": "youtube",
+                                "video_id": vid_id,
+                                "id": f"v-search-{vid_id}",
+                                "title": entry.get('title') or f"유튜브 동영상 ({vid_id})",
+                                "duration_seconds": dur,
+                                "thumbnail_url": thumb,
+                                "channel_title": entry.get('uploader') or entry.get('channel') or "YouTube",
+                                "deep_link_app": f"youtube://watch?v={vid_id}",
+                                "deep_link_web": f"https://www.youtube.com/watch?v={vid_id}"
+                            })
+                    if results:
+                        return results
+            except Exception as e:
+                print(f"yt-dlp search error: {e}")
+
+        try:
+            async with httpx.AsyncClient(timeout=4.0) as client:
+                resp = await client.get("https://invidious.privacydev.net/api/v1/search", params={"q": query, "type": "video"})
+                if resp.status_code == 200:
+                    for item in resp.json()[:limit]:
+                        vid_id = item.get("videoId")
+                        if vid_id:
+                            results.append({
+                                "platform": "youtube",
+                                "video_id": vid_id,
+                                "id": f"v-search-{vid_id}",
+                                "title": item.get("title") or f"유튜브 동영상 ({vid_id})",
+                                "duration_seconds": int(item.get("lengthSeconds") or 300),
+                                "thumbnail_url": f"https://img.youtube.com/vi/{vid_id}/hqdefault.jpg",
+                                "channel_title": item.get("author") or "YouTube",
+                                "deep_link_app": f"youtube://watch?v={vid_id}",
+                                "deep_link_web": f"https://www.youtube.com/watch?v={vid_id}"
+                            })
+        except Exception:
+            pass
+
+        return results
