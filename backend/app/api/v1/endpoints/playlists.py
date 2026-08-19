@@ -2,7 +2,7 @@ import uuid
 import time
 from fastapi import APIRouter, HTTPException, Query, Depends, Header
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from pydantic import BaseModel
@@ -348,9 +348,8 @@ async def delete_playlist(
     SHARED_LIVE_ROOMS = [r for r in SHARED_LIVE_ROOMS if r["id"] != playlist_id]
     if db_pl:
         try:
-            for item in (db_pl.items or []):
-                await db.delete(item)
-            await db.delete(db_pl)
+            await db.execute(delete(PlaylistItem).where(PlaylistItem.playlist_id == db_pl.id))
+            await db.execute(delete(PlaylistModel).where(PlaylistModel.id == db_pl.id))
             await db.commit()
         except Exception as del_err:
             await db.rollback()
