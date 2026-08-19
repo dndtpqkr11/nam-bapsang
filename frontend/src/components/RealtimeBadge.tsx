@@ -14,18 +14,9 @@ export const RealtimeBadge: React.FC<RealtimeBadgeProps> = ({
   initialWatchers = 1,
   isJoined = false
 }) => {
-  const baseCount = initialWatchers;
-  const [watchers, setWatchers] = useState<number>(isJoined ? baseCount + 1 : baseCount);
+  const [watchers, setWatchers] = useState<number>(initialWatchers || 1);
   const [connected, setConnected] = useState<boolean>(false);
   const wsRef = useRef<WebSocket | null>(null);
-
-  useEffect(() => {
-    if (isJoined || connected) {
-      setWatchers(baseCount + 1);
-    } else {
-      setWatchers(baseCount);
-    }
-  }, [isJoined, connected, baseCount]);
 
   useEffect(() => {
     const wsBaseUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/api/v1';
@@ -42,7 +33,6 @@ export const RealtimeBadge: React.FC<RealtimeBadgeProps> = ({
         ws.onopen = () => {
           if (!isMounted) return;
           setConnected(true);
-          setWatchers(baseCount + 1);
           timer = setInterval(() => {
             if (ws && ws.readyState === WebSocket.OPEN) {
               ws.send('ping');
@@ -55,8 +45,8 @@ export const RealtimeBadge: React.FC<RealtimeBadgeProps> = ({
           try {
             const data = JSON.parse(event.data);
             if (data.type === 'PRESENCE_UPDATE' && typeof data.active_watchers === 'number') {
-              const liveOffset = Math.max(1, data.active_watchers);
-              setWatchers(baseCount + liveOffset);
+              // 실제 동시 접속자 수 100% 실시간 표기
+              setWatchers(data.active_watchers);
             }
           } catch (e) {
             // ignore non-json messages
@@ -66,7 +56,6 @@ export const RealtimeBadge: React.FC<RealtimeBadgeProps> = ({
         ws.onclose = () => {
           if (!isMounted) return;
           setConnected(false);
-          setWatchers(isJoined ? baseCount + 1 : baseCount);
           if (timer) clearInterval(timer);
           reconnectTimer = setTimeout(() => {
             if (isMounted) connectWebSocket();
@@ -94,9 +83,7 @@ export const RealtimeBadge: React.FC<RealtimeBadgeProps> = ({
         wsRef.current.close();
       }
     };
-  }, [playlistId, baseCount, isJoined]);
-
-  const displayCount = isJoined || connected ? Math.max(watchers, baseCount + 1) : watchers;
+  }, [playlistId]);
 
   return (
     <div
@@ -112,7 +99,7 @@ export const RealtimeBadge: React.FC<RealtimeBadgeProps> = ({
         }`}
       />
       <Users className="w-3.5 h-3.5" />
-      <span>{displayCount}명 함께 합석 중</span>
+      <span>{watchers}명 함께 합석 중</span>
     </div>
   );
 };

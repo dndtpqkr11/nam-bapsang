@@ -147,7 +147,6 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
 
       ws.onopen = () => {
         setIsConnected(true);
-        setActiveWatchers(baseWatchersRef.current + 1);
 
         // Keep-Alive Ping every 15s
         pingInterval = setInterval(() => {
@@ -160,9 +159,8 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (data.type === 'PRESENCE_UPDATE') {
-            const liveOffset = Math.max(1, data.active_watchers || 1);
-            setActiveWatchers(baseWatchersRef.current + liveOffset);
+          if (data.type === 'PRESENCE_UPDATE' && typeof data.active_watchers === 'number') {
+            setActiveWatchers(data.active_watchers);
           } else if (data.type === 'CHAT_MESSAGE') {
             // Deduplicate using sender_id (ignore broadcast of own messages)
             const isFromOtherSender = data.sender_id ? (data.sender_id !== clientSessionIdRef.current) : (data.nickname !== nicknameRef.current);

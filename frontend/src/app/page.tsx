@@ -1324,7 +1324,7 @@ export default function HomePage() {
                         video: v, 
                         isLive: true, 
                         playlistId: pl.id,
-                        initialWatchers: pl.active_watchers || 38,
+                        initialWatchers: pl.active_watchers || 1,
                         isHost: isUserCreatedRoom,
                         hostNickname: pl.author || '방장'
                       })} 
