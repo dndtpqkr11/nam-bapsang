@@ -53,13 +53,25 @@ export default function MyPage() {
         } catch {}
       }
 
-      // Load my created playlists
+      // Load my created playlists and live rooms
+      let savedList: Playlist[] = [];
       const savedCreated = localStorage.getItem('my_created_playlists');
       if (savedCreated) {
+        try { savedList = JSON.parse(savedCreated); } catch {}
+      }
+
+      const savedLive = localStorage.getItem('user_live_rooms');
+      if (savedLive) {
         try {
-          setMyCreated(JSON.parse(savedCreated));
+          const parsedLive: Playlist[] = JSON.parse(savedLive);
+          parsedLive.forEach((room) => {
+            if (!savedList.some((p) => p.id === room.id)) {
+              savedList.unshift(room);
+            }
+          });
         } catch {}
       }
+      setMyCreated(savedList);
 
       // Load recommended playlists
       const savedRecObjs = localStorage.getItem('recommended_playlists_objects');
@@ -139,15 +151,25 @@ export default function MyPage() {
   };
 
   const handleDeletePlaylist = async (playlistId: string) => {
-    await deletePlaylist(playlistId);
+    try { await deletePlaylist(playlistId); } catch {}
 
     const updatedCreated = myCreated.filter(pl => pl.id !== playlistId);
     setMyCreated(updatedCreated);
     if (typeof window !== 'undefined') {
       localStorage.setItem('my_created_playlists', JSON.stringify(updatedCreated));
+      try {
+        const liveRooms: Playlist[] = JSON.parse(localStorage.getItem('user_live_rooms') || '[]');
+        const updatedLive = liveRooms.filter(pl => pl.id !== playlistId);
+        localStorage.setItem('user_live_rooms', JSON.stringify(updatedLive));
+      } catch {}
+      try {
+        let hostRoomIds: string[] = JSON.parse(localStorage.getItem('my_host_room_ids') || '[]');
+        hostRoomIds = hostRoomIds.filter(id => id !== playlistId);
+        localStorage.setItem('my_host_room_ids', JSON.stringify(hostRoomIds));
+      } catch {}
     }
 
-    showToast('🗑️ 반찬이 삭제되었습니다.');
+    showToast('🗑️ 차린 반찬/라이브 방이 보관함과 목록에서 삭제되었습니다.');
   };
 
   const handleDeleteVideo = (playlistId: string, videoIndex: number) => {

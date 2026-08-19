@@ -795,16 +795,37 @@ export default function HomePage() {
   };
 
   const handleDeletePlaylist = async (playlistId: string) => {
-    await deletePlaylist(playlistId);
+    try {
+      await deletePlaylist(playlistId);
+    } catch {}
 
     const updatedCreated = myCreatedPlaylists.filter(pl => pl.id !== playlistId);
     setMyCreatedPlaylists(updatedCreated);
+
+    setUserLiveRooms((prev) => {
+      const updated = prev.filter((pl) => pl.id !== playlistId);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('user_live_rooms', JSON.stringify(updated));
+      }
+      return updated;
+    });
+
     if (typeof window !== 'undefined') {
       localStorage.setItem('my_created_playlists', JSON.stringify(updatedCreated));
+      try {
+        let hostRoomIds: string[] = JSON.parse(localStorage.getItem('my_host_room_ids') || '[]');
+        hostRoomIds = hostRoomIds.filter(id => id !== playlistId);
+        localStorage.setItem('my_host_room_ids', JSON.stringify(hostRoomIds));
+      } catch {}
     }
 
     setPlaylists(prev => prev.filter(pl => pl.id !== playlistId));
-    showToast('🗑️ 반찬이 삭제되었습니다.');
+
+    if (playingVideoState?.playlistId === playlistId) {
+      setPlayingVideoState(null);
+    }
+
+    showToast('🗑️ 내 보관함 및 라이브 목록에서 방/반찬이 삭제되었습니다.');
   };
 
   const handleDeleteVideoFromPlaylist = (playlistId: string, videoIndex: number) => {
@@ -924,10 +945,20 @@ export default function HomePage() {
                 existing.push(liveRoom.id);
                 localStorage.setItem('my_host_room_ids', JSON.stringify(existing));
               }
+
+              // Also add to my_created_playlists for My Storage (내 보관함)
+              let myCreated: Playlist[] = [];
+              const rawCreated = localStorage.getItem('my_created_playlists');
+              if (rawCreated) myCreated = JSON.parse(rawCreated);
+              if (!myCreated.some(p => p.id === liveRoom.id)) {
+                myCreated.unshift(liveRoom);
+                localStorage.setItem('my_created_playlists', JSON.stringify(myCreated));
+              }
             } catch {}
           }
           return updated;
         });
+        syncLocalCreated();
         showToast(`🎉 👑 ${myNickname} 님의 라이브 밥상방이 목록에 즉시 개설되었습니다!`);
 
         if (finalVideos.length > 0) {
@@ -963,10 +994,20 @@ export default function HomePage() {
                 existing.push(fallbackPl.id);
                 localStorage.setItem('my_host_room_ids', JSON.stringify(existing));
               }
+
+              // Also add fallbackPl to my_created_playlists for My Storage (내 보관함)
+              let myCreated: Playlist[] = [];
+              const rawCreated = localStorage.getItem('my_created_playlists');
+              if (rawCreated) myCreated = JSON.parse(rawCreated);
+              if (!myCreated.some(p => p.id === fallbackPl.id)) {
+                myCreated.unshift(fallbackPl);
+                localStorage.setItem('my_created_playlists', JSON.stringify(myCreated));
+              }
             } catch {}
           }
           return updated;
         });
+        syncLocalCreated();
         showToast(`🎉 👑 ${myNickname} 님의 라이브 밥상방이 목록에 즉시 개설되었습니다!`);
 
         if (finalVideos.length > 0) {
