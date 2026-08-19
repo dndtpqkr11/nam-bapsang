@@ -14,6 +14,20 @@ function getApiBaseUrl(): string {
   return 'https://nam-bapsang-backend.onrender.com/api/v1';
 }
 
+export function getClientSessionId(): string {
+  if (typeof window === 'undefined') return 'client-ssr';
+  try {
+    let id = sessionStorage.getItem('app_client_session_id');
+    if (!id) {
+      id = `client-${Math.random().toString(36).substring(2, 9)}-${Date.now()}`;
+      sessionStorage.setItem('app_client_session_id', id);
+    }
+    return id;
+  } catch {
+    return 'client-anon';
+  }
+}
+
 function getAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',

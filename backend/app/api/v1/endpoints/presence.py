@@ -10,27 +10,35 @@ router = APIRouter()
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, Set[WebSocket]] = {}
-        self.room_hosts: Dict[str, str] = {} # playlist_id -> host_session_id
+        self.room_client_sockets: Dict[str, Dict[str, Set[WebSocket]]] = {} # playlist_id -> { client_id: Set[WebSocket] }
+        self.room_hosts: Dict[str, str] = {} # playlist_id -> host_client_id
         self.room_chat_history: Dict[str, List[dict]] = {} # playlist_id -> List of recent 50 chat messages
         self.room_video_state: Dict[str, dict] = {} # playlist_id -> { "video": dict, "started_at": float }
 
-    async def connect(self, playlist_id: str, websocket: WebSocket) -> str:
+    async def connect(self, playlist_id: str, websocket: WebSocket, client_id: Optional[str] = None) -> str:
         await websocket.accept()
+        if not client_id:
+            client_id = f"anon-{str(uuid.uuid4())[:8]}"
+
         if playlist_id not in self.active_connections:
             self.active_connections[playlist_id] = set()
         self.active_connections[playlist_id].add(websocket)
 
-        session_id = str(uuid.uuid4())[:8]
+        if playlist_id not in self.room_client_sockets:
+            self.room_client_sockets[playlist_id] = {}
+        if client_id not in self.room_client_sockets[playlist_id]:
+            self.room_client_sockets[playlist_id][client_id] = set()
+        self.room_client_sockets[playlist_id][client_id].add(websocket)
 
         # 방장이 없으면 첫 번째 접속자가 방장(Host) 할당
-        if playlist_id not in self.room_hosts or not self.active_connections[playlist_id]:
-            self.room_hosts[playlist_id] = session_id
+        if playlist_id not in self.room_hosts or not self.room_client_sockets[playlist_id]:
+            self.room_hosts[playlist_id] = client_id
 
-        # Redis Set에 활성 유저 세션 추가
+        # Redis Set에 활성 유저 세션 추가 (동일 브라우저 탭 세션은 1개로 중복 제거)
         try:
             from app.core.redis import get_redis_client
             r = await get_redis_client()
-            await r.sadd(f"presence:{playlist_id}", session_id)
+            await r.sadd(f"presence:{playlist_id}", client_id)
         except Exception:
             pass
 
@@ -61,20 +69,27 @@ class ConnectionManager:
                 pass
 
         await self.broadcast_count(playlist_id)
-        return session_id
+        return client_id
 
-    async def disconnect(self, playlist_id: str, websocket: WebSocket, session_id: str):
+    async def disconnect(self, playlist_id: str, websocket: WebSocket, client_id: str):
         if playlist_id in self.active_connections:
             self.active_connections[playlist_id].discard(websocket)
             if not self.active_connections[playlist_id]:
                 del self.active_connections[playlist_id]
 
-        try:
-            from app.core.redis import get_redis_client
-            r = await get_redis_client()
-            await r.srem(f"presence:{playlist_id}", session_id)
-        except Exception:
-            pass
+        if playlist_id in self.room_client_sockets:
+            if client_id in self.room_client_sockets[playlist_id]:
+                self.room_client_sockets[playlist_id][client_id].discard(websocket)
+                if not self.room_client_sockets[playlist_id][client_id]:
+                    del self.room_client_sockets[playlist_id][client_id]
+                    try:
+                        from app.core.redis import get_redis_client
+                        r = await get_redis_client()
+                        await r.srem(f"presence:{playlist_id}", client_id)
+                    except Exception:
+                        pass
+            if not self.room_client_sockets[playlist_id]:
+                del self.room_client_sockets[playlist_id]
 
         await self.broadcast_count(playlist_id)
 
@@ -87,7 +102,7 @@ class ConnectionManager:
                 return redis_count
         except Exception:
             pass
-        return len(self.active_connections.get(playlist_id, set()))
+        return len(self.room_client_sockets.get(playlist_id, {}))
 
     async def broadcast_count(self, playlist_id: str):
         count = await self.get_watcher_count(playlist_id)
@@ -145,7 +160,8 @@ async def websocket_presence(websocket: WebSocket, playlist_id: str):
     """
     실시간 방장 합석 라이브 모드 & 실시간 채팅 / 영상 동기화 WebSocket 엔드포인트
     """
-    session_id = await manager.connect(playlist_id, websocket)
+    client_id = websocket.query_params.get("client_id")
+    session_id = await manager.connect(playlist_id, websocket, client_id=client_id)
     try:
         while True:
             text = await websocket.receive_text()

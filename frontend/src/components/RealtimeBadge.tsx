@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { Users } from 'lucide-react';
+import { getClientSessionId } from '@/lib/api';
 
 interface RealtimeBadgeProps {
   playlistId: string;
@@ -20,17 +21,21 @@ export const RealtimeBadge: React.FC<RealtimeBadgeProps> = ({
 
   useEffect(() => {
     const getWebSocketUrl = (roomId: string): string => {
+      let base = '';
       if (process.env.NEXT_PUBLIC_WS_URL) {
-        return `${process.env.NEXT_PUBLIC_WS_URL}/ws/${roomId}`;
-      }
-      if (typeof window !== 'undefined') {
+        base = `${process.env.NEXT_PUBLIC_WS_URL}/ws/${roomId}`;
+      } else if (typeof window !== 'undefined') {
         const host = window.location.hostname;
         const port = window.location.port;
         if (host === 'localhost' || host === '127.0.0.1' || port === '3000' || port === '3001') {
-          return `ws://${host}:8000/ws/${roomId}`;
+          base = `ws://${host}:8000/ws/${roomId}`;
+        } else {
+          base = `wss://nam-bapsang-backend.onrender.com/ws/${roomId}`;
         }
+      } else {
+        base = `wss://nam-bapsang-backend.onrender.com/ws/${roomId}`;
       }
-      return `wss://nam-bapsang-backend.onrender.com/ws/${roomId}`;
+      return `${base}?client_id=${encodeURIComponent(getClientSessionId())}`;
     };
 
     const wsUrl = getWebSocketUrl(playlistId);

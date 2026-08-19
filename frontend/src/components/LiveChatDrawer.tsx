@@ -169,10 +169,10 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
 
   useEffect(() => {
     const getWebSocketUrl = (roomId: string): string => {
+      let base = '';
       if (process.env.NEXT_PUBLIC_WS_URL) {
-        return `${process.env.NEXT_PUBLIC_WS_URL}/ws/${roomId}`;
-      }
-      if (typeof window !== 'undefined') {
+        base = `${process.env.NEXT_PUBLIC_WS_URL}/ws/${roomId}`;
+      } else if (typeof window !== 'undefined') {
         const host = window.location.hostname;
         const port = window.location.port;
         if (host === 'localhost' || host === '127.0.0.1' || port === '3000' || port === '3001') {
