@@ -676,27 +676,18 @@ export default function HomePage() {
       if (data && data.length > 0) {
         // Extract shared live rooms created by any user from backend
         const sharedLive = data.filter((pl) => (pl as any).is_live || pl.id.startsWith('pl-live-'));
-        const sharedLiveMap = new Map<string, Playlist>();
-        sharedLive.forEach((item) => sharedLiveMap.set(String(item.id), item));
-
-        const localLiveMap = new Map<string, Playlist>();
-        localLive.filter(item => item.id.startsWith('pl-live-user-')).forEach(item => localLiveMap.set(String(item.id), item));
-
-        const allKeys = Array.from(sharedLiveMap.keys()).concat(Array.from(localLiveMap.keys()));
-        const updatedLiveRooms = Array.from(new Set(allKeys))
-          .map(id => sharedLiveMap.get(id) || localLiveMap.get(id)!)
-          .filter(Boolean);
-
-        setUserLiveRooms(updatedLiveRooms);
+        setUserLiveRooms(() => {
+          const combinedMap = new Map<string, Playlist>();
+          [...sharedLive, ...localLive].forEach((item) => combinedMap.set(String(item.id), item));
+          return Array.from(combinedMap.values());
+        });
         setPlaylists(() => {
           const combinedMap = new Map<string, Playlist>();
           [...localCreated, ...data].forEach((pl) => combinedMap.set(String(pl.id), pl));
           return Array.from(combinedMap.values());
         });
       } else {
-        const localLiveMap = new Map<string, Playlist>();
-        localLive.filter(item => item.id.startsWith('pl-live-user-')).forEach(item => localLiveMap.set(String(item.id), item));
-        setUserLiveRooms(Array.from(localLiveMap.values()));
+        setUserLiveRooms(localLive);
         setPlaylists(() => {
           const combinedMap = new Map<string, Playlist>();
           [...localCreated, ...FALLBACK_PLAYLISTS].forEach((pl) => combinedMap.set(String(pl.id), pl));
@@ -704,9 +695,7 @@ export default function HomePage() {
         });
       }
     } catch {
-      const localLiveMap = new Map<string, Playlist>();
-      localLive.filter(item => item.id.startsWith('pl-live-user-')).forEach(item => localLiveMap.set(String(item.id), item));
-      setUserLiveRooms(Array.from(localLiveMap.values()));
+      setUserLiveRooms(localLive);
       setPlaylists(() => {
         const combinedMap = new Map<string, Playlist>();
         [...localCreated, ...FALLBACK_PLAYLISTS].forEach((pl) => combinedMap.set(String(pl.id), pl));
