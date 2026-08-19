@@ -21,12 +21,12 @@ app.add_middleware(
 app.include_router(api_router, prefix="/api/v1")
 
 @app.websocket("/ws/{playlist_id}")
-async def direct_ws_1(websocket: WebSocket, playlist_id: str):
-    await websocket_presence(websocket, playlist_id)
+async def direct_ws_1(websocket: WebSocket, playlist_id: str, client_id: str = None):
+    await websocket_presence(websocket, playlist_id, client_id=client_id)
 
 @app.websocket("/api/v1/presence/ws/{playlist_id}")
-async def direct_ws_2(websocket: WebSocket, playlist_id: str):
-    await websocket_presence(websocket, playlist_id)
+async def direct_ws_2(websocket: WebSocket, playlist_id: str, client_id: str = None):
+    await websocket_presence(websocket, playlist_id, client_id=client_id)
 
 @app.on_event("startup")
 async def on_startup():

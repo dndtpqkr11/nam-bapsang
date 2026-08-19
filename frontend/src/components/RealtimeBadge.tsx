@@ -20,6 +20,12 @@ export const RealtimeBadge: React.FC<RealtimeBadgeProps> = ({
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
+    setWatchers(initialWatchers || 1);
+    if (isJoined) {
+      setConnected(true);
+      return;
+    }
+
     const getWebSocketUrl = (roomId: string): string => {
       let base = '';
       if (process.env.NEXT_PUBLIC_WS_URL) {

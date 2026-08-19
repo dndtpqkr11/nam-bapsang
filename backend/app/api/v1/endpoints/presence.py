@@ -150,11 +150,16 @@ async def get_active_watchers_count(playlist_id: str):
     return {"playlist_id": playlist_id, "active_watchers": count}
 
 @router.websocket("/ws/{playlist_id}")
-async def websocket_presence(websocket: WebSocket, playlist_id: str):
+async def websocket_presence(websocket: WebSocket, playlist_id: str, client_id: Optional[str] = None):
     """
     실시간 방장 합석 라이브 모드 & 실시간 채팅 / 영상 동기화 WebSocket 엔드포인트
     """
-    client_id = websocket.query_params.get("client_id")
+    if not client_id:
+        client_id = websocket.query_params.get("client_id")
+    if not client_id or client_id in ["undefined", "null", "client-anon", ""]:
+        client_host = websocket.client.host if websocket.client else "anon"
+        client_id = f"ip-{client_host}"
+
     session_id = await manager.connect(playlist_id, websocket, client_id=client_id)
     try:
         while True:
