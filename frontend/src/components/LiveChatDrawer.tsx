@@ -128,7 +128,42 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
     const initNick = isHost ? `${myName} (방장)` : myName;
     setNickname(initNick);
     nicknameRef.current = initNick;
+  }, [isHost]);
 
+  // Load saved local chat history on room entry
+  useEffect(() => {
+    if (typeof window !== 'undefined' && playlistId) {
+      try {
+        const savedHist = localStorage.getItem(`live_chat_history_${playlistId}`);
+        if (savedHist) {
+          const parsed: ChatMessage[] = JSON.parse(savedHist);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setMessages((prev) => {
+              const sysMsg = prev.find((m) => m.isSystem);
+              const nonSysMsgs = parsed.filter((m) => !m.isSystem);
+              const existingIds = new Set(prev.map((m) => m.id));
+              const newOnly = nonSysMsgs.filter((m) => !existingIds.has(m.id));
+              return sysMsg ? [sysMsg, ...newOnly] : newOnly;
+            });
+          }
+        }
+      } catch {}
+    }
+  }, [playlistId]);
+
+  // Auto-save recent chat messages to LocalStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined' && playlistId && messages.length > 1) {
+      try {
+        const toSave = messages.filter((m) => !m.isSystem).slice(-50);
+        if (toSave.length > 0) {
+          localStorage.setItem(`live_chat_history_${playlistId}`, JSON.stringify(toSave));
+        }
+      } catch {}
+    }
+  }, [messages, playlistId]);
+
+  useEffect(() => {
     const getWebSocketUrl = (roomId: string): string => {
       if (process.env.NEXT_PUBLIC_WS_URL) {
         return `${process.env.NEXT_PUBLIC_WS_URL}/ws/${roomId}`;
@@ -166,6 +201,24 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
           const data = JSON.parse(event.data);
           if (data.type === 'PRESENCE_UPDATE' && typeof data.active_watchers === 'number') {
             setActiveWatchers(data.active_watchers);
+          } else if (data.type === 'CHAT_HISTORY' && Array.isArray(data.history)) {
+            const serverMsgs: ChatMessage[] = data.history.map((item: any) => ({
+              id: item.msg_id || `m-server-${Math.random()}`,
+              nickname: item.nickname || '익명의 밥상러',
+              text: item.text,
+              timestamp: item.timestamp || '이전 대화',
+              isMe: item.sender_id === clientSessionIdRef.current || item.nickname === nicknameRef.current,
+              isHostMsg: item.is_host
+            }));
+            if (serverMsgs.length > 0) {
+              setMessages((prev) => {
+                const sysMsg = prev.find((m) => m.isSystem);
+                const existingIds = new Set(prev.map((m) => m.id));
+                const newOnly = serverMsgs.filter((m) => !existingIds.has(m.id));
+                const combined = sysMsg ? [sysMsg, ...prev.filter(m => !m.isSystem), ...newOnly] : [...prev, ...newOnly];
+                return combined.slice(-50);
+              });
+            }
           } else if (data.type === 'CHAT_MESSAGE') {
             // Deduplicate using sender_id (ignore broadcast of own messages)
             const isFromOtherSender = data.sender_id ? (data.sender_id !== clientSessionIdRef.current) : (data.nickname !== nicknameRef.current);

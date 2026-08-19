@@ -6,11 +6,12 @@ from typing import Dict, Set
 
 router = APIRouter()
 
-# In-Memory WebSocket Manager (coupled with Redis and Host State)
+# In-Memory WebSocket Manager (coupled with Redis, Host State & Chat History)
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, Set[WebSocket]] = {}
         self.room_hosts: Dict[str, str] = {} # playlist_id -> host_session_id
+        self.room_chat_history: Dict[str, List[dict]] = {} # playlist_id -> List of recent 50 chat messages
 
     async def connect(self, playlist_id: str, websocket: WebSocket) -> str:
         await websocket.accept()
@@ -31,6 +32,17 @@ class ConnectionManager:
             await r.sadd(f"presence:{playlist_id}", session_id)
         except Exception:
             pass
+
+        # Send recent chat history (max 50) to newly connected user
+        if playlist_id in self.room_chat_history and self.room_chat_history[playlist_id]:
+            try:
+                await websocket.send_json({
+                    "type": "CHAT_HISTORY",
+                    "playlist_id": playlist_id,
+                    "history": self.room_chat_history[playlist_id]
+                })
+            except Exception:
+                pass
 
         await self.broadcast_count(playlist_id)
         return session_id
@@ -118,6 +130,14 @@ async def websocket_presence(websocket: WebSocket, playlist_id: str):
                             "sender_id": payload.get("sender_id") or session_id,
                             "msg_id": payload.get("msg_id") or str(uuid.uuid4())
                         }
+                        
+                        # Store in room_chat_history (Max 50)
+                        if playlist_id not in manager.room_chat_history:
+                            manager.room_chat_history[playlist_id] = []
+                        manager.room_chat_history[playlist_id].append(chat_event)
+                        if len(manager.room_chat_history[playlist_id]) > 50:
+                            manager.room_chat_history[playlist_id] = manager.room_chat_history[playlist_id][-50:]
+
                         await manager.broadcast_payload(playlist_id, chat_event)
 
                     elif msg_type == "HOST_CHANGE_VIDEO":
