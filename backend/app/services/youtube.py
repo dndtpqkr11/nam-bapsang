@@ -2,6 +2,7 @@ import re
 import os
 import time
 import json
+import urllib.parse
 import isodate
 import httpx
 from typing import Dict, Any, Optional, List
@@ -264,7 +265,7 @@ class YouTubeMetadataService:
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7'
             }
-            url = f"https://www.youtube.com/results?search_query={httpx.QueryParams({'q': query})['q']}"
+            url = f"https://www.youtube.com/results?search_query={urllib.parse.quote(query)}"
             async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=5.0) as client:
                 resp = await client.get(url)
                 if resp.status_code == 200:
