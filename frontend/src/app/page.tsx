@@ -918,6 +918,13 @@ export default function HomePage() {
           const updated = [liveRoom, ...prev];
           if (typeof window !== 'undefined') {
             localStorage.setItem('user_live_rooms', JSON.stringify(updated));
+            try {
+              const existing = JSON.parse(localStorage.getItem('my_host_room_ids') || '[]');
+              if (!existing.includes(liveRoom.id)) {
+                existing.push(liveRoom.id);
+                localStorage.setItem('my_host_room_ids', JSON.stringify(existing));
+              }
+            } catch {}
           }
           return updated;
         });
@@ -950,6 +957,13 @@ export default function HomePage() {
           const updated = [fallbackPl, ...prev];
           if (typeof window !== 'undefined') {
             localStorage.setItem('user_live_rooms', JSON.stringify(updated));
+            try {
+              const existing = JSON.parse(localStorage.getItem('my_host_room_ids') || '[]');
+              if (!existing.includes(fallbackPl.id)) {
+                existing.push(fallbackPl.id);
+                localStorage.setItem('my_host_room_ids', JSON.stringify(existing));
+              }
+            } catch {}
           }
           return updated;
         });
@@ -1306,13 +1320,23 @@ export default function HomePage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                 {liveCowatchingPlaylists.map((pl) => {
                   const isJoined = playingVideoState?.isLive && playingVideoState?.playlistId === pl.id;
+                  const myHostRoomIds: string[] = typeof window !== 'undefined' && localStorage.getItem('my_host_room_ids')
+                    ? (() => { try { return JSON.parse(localStorage.getItem('my_host_room_ids')!); } catch { return []; } })()
+                    : [];
+
                   const loggedUser = typeof window !== 'undefined' && localStorage.getItem('user')
                     ? (() => { try { return JSON.parse(localStorage.getItem('user')!); } catch { return null; } })()
                     : null;
-                  const isUserCreatedRoom = (loggedUser && (
+
+                  const savedUserNickname = typeof window !== 'undefined' ? localStorage.getItem('user_nickname') : null;
+
+                  const isUserCreatedRoom = myHostRoomIds.includes(pl.id) || (loggedUser && (
                     pl.author_id === `u-${loggedUser.id}` ||
                     pl.author === loggedUser.nickname ||
                     pl.author === `${loggedUser.nickname} (방장)`
+                  )) || (savedUserNickname && (
+                    pl.author === savedUserNickname ||
+                    pl.author === `${savedUserNickname} (방장)`
                   )) || pl.author_id === 'u-me' || pl.id.startsWith('pl-live-user-');
 
                   return (
