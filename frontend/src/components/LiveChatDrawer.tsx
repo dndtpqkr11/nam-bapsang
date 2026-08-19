@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, MessageSquare, Users, Sparkles, Flame, Smile, Radio, Crown, Tv, RefreshCw, Trash2 } from 'lucide-react';
+import { Send, MessageSquare, Users, Sparkles, Flame, Smile, Radio, Crown, Tv, RefreshCw, Trash2, Search, Clock } from 'lucide-react';
 import { Video } from '@/types';
+import { searchYouTubeVideos } from '@/lib/api';
+import { formatSecondsToMMSS } from '@/lib/deeplink';
 
 interface ChatMessage {
   id: string;
@@ -69,6 +71,9 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [showHostControlPanel, setShowHostControlPanel] = useState<boolean>(false);
   const [customVideoUrlInput, setCustomVideoUrlInput] = useState<string>('');
+  const [hostSearchQuery, setHostSearchQuery] = useState<string>('');
+  const [hostSearchResults, setHostSearchResults] = useState<Video[]>([]);
+  const [hostSearchLoading, setHostSearchLoading] = useState<boolean>(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -285,27 +290,54 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
     setCustomVideoUrlInput('');
   };
 
-  const handleCustomUrlSubmit = (e: React.FormEvent) => {
+  const handleHostSearchSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customVideoUrlInput.trim() || !isHost) return;
+    const cleanQuery = (hostSearchQuery || customVideoUrlInput).trim();
+    if (!cleanQuery || !isHost) return;
 
-    let vidId = 'JdRcM4fLwgE';
-    const match = customVideoUrlInput.match(/(?:v=|\/embed\/|\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+    setHostSearchLoading(true);
+
+    // Direct YouTube URL parsing
+    const match = cleanQuery.match(/(?:v=|\/embed\/|\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
     if (match && match[1]) {
-      vidId = match[1];
+      const vidId = match[1];
+      const customVideo: Video = {
+        id: `v-host-${Date.now()}`,
+        title: `📺 [방장 지정 영상] 유튜브 영상`,
+        platform: 'youtube',
+        video_id: vidId,
+        duration_seconds: 600,
+        thumbnail_url: `https://img.youtube.com/vi/${vidId}/hqdefault.jpg`,
+        channel_title: `${displayHostName} 라이브`
+      };
+      handleHostChangeVideo(customVideo);
+      setHostSearchLoading(false);
+      setHostSearchQuery('');
+      setHostSearchResults([]);
+      return;
     }
 
-    const customVideo: Video = {
-      id: `v-host-${Date.now()}`,
-      title: `📺 [방장 추천 반찬] 유튜브 실시간 추천 영상`,
-      platform: 'youtube',
-      video_id: vidId,
-      duration_seconds: 600,
-      thumbnail_url: `https://i.ytimg.com/vi/${vidId}/hqdefault.jpg`,
-      channel_title: `${nickname} 라이브`
-    };
-
-    handleHostChangeVideo(customVideo);
+    // Keyword Search via YouTube API
+    try {
+      const results = await searchYouTubeVideos(cleanQuery);
+      if (results && results.length > 0) {
+        setHostSearchResults(results.map((item: any) => ({
+          id: item.id || `v-${item.video_id}`,
+          title: item.title,
+          platform: 'youtube',
+          video_id: item.video_id,
+          duration_seconds: item.duration_seconds || 300,
+          thumbnail_url: item.thumbnail_url || `https://img.youtube.com/vi/${item.video_id}/hqdefault.jpg`,
+          channel_title: item.channel_title || 'YouTube'
+        })));
+      } else {
+        setHostSearchResults([]);
+      }
+    } catch {
+      setHostSearchResults([]);
+    } finally {
+      setHostSearchLoading(false);
+    }
   };
 
   return (
@@ -362,18 +394,86 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
 
       {/* Host Control Panel Drawer (Collapsible for Host only) */}
       {isHost && showHostControlPanel && (
-        <div className="p-3 bg-gradient-to-r from-amber-950/80 via-orange-950/70 to-amber-950/80 border-b border-amber-500/30 space-y-2.5 shrink-0 animate-fadeIn">
+        <div className="p-3 bg-gradient-to-r from-amber-950/90 via-orange-950/80 to-amber-950/90 border-b border-amber-500/30 space-y-2.5 shrink-0 animate-fadeIn">
           <div className="flex items-center justify-between text-xs font-black text-amber-300">
             <span className="flex items-center gap-1">
               <Crown className="w-3.5 h-3.5 text-amber-400" />
-              <span>👑 방장 전용: 룸 전원 라이브 반찬(영상) 교체</span>
+              <span>👑 방장 전용: 유튜브 라이브 키워드 검색 & 영상 교체</span>
             </span>
           </div>
 
+          {/* YouTube Search Input Form for Host */}
+          <form onSubmit={handleHostSearchSubmit} className="flex gap-1.5">
+            <div className="relative flex-1">
+              <Search className="w-3.5 h-3.5 text-amber-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={hostSearchQuery}
+                onChange={(e) => setHostSearchQuery(e.target.value)}
+                placeholder="유튜브 검색어 (성시경, 백종원, 침착맨 등) 또는 URL..."
+                className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-black/60 text-xs text-white placeholder-gray-400 border border-amber-500/40 focus:outline-none focus:border-amber-300 font-medium"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={hostSearchLoading || !hostSearchQuery.trim()}
+              className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-black text-xs shrink-0 cursor-pointer shadow-md flex items-center gap-1"
+            >
+              <span>{hostSearchLoading ? '검색 중...' : '유튜브 검색'}</span>
+            </button>
+          </form>
+
+          {/* Live YouTube Search Results inside Host Control Panel */}
+          {hostSearchResults.length > 0 && (
+            <div className="space-y-1.5 pt-1">
+              <div className="text-[11px] text-amber-300 font-bold flex items-center justify-between px-1">
+                <span>📺 검색 결과 ({hostSearchResults.length}건) - 클릭 시 방 전체 영상 즉시 변경</span>
+                <button
+                  type="button"
+                  onClick={() => setHostSearchResults([])}
+                  className="text-[10px] text-gray-400 hover:text-white underline cursor-pointer"
+                >
+                  닫기
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[220px] overflow-y-auto pr-1 custom-scrollbar">
+                {hostSearchResults.map((vid) => (
+                  <div
+                    key={vid.video_id}
+                    className="flex items-center gap-2 p-2 rounded-xl bg-black/50 border border-amber-500/30 hover:border-amber-400 transition-all group"
+                  >
+                    <img
+                      src={vid.thumbnail_url}
+                      alt={vid.title}
+                      className="w-14 h-10 object-cover rounded-lg shrink-0 border border-white/10"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <h6 className="text-[11px] font-bold text-white truncate leading-tight" title={vid.title}>
+                        {vid.title}
+                      </h6>
+                      <p className="text-[10px] text-amber-300/80 truncate">
+                        ⏱️ {formatSecondsToMMSS(vid.duration_seconds)} | {vid.channel_title}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleHostChangeVideo(vid)}
+                      className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-[11px] font-black shrink-0 shadow-md cursor-pointer transition-all active:scale-95 flex items-center gap-1"
+                    >
+                      <span>▶️ 재생</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Quick Presets */}
           <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1">
             {HOST_VIDEO_PRESETS.map((preset, idx) => (
               <button
                 key={idx}
+                type="button"
                 onClick={() => handleHostChangeVideo({
                   id: `v-preset-${Date.now()}-${idx}`,
                   title: preset.title,
@@ -389,22 +489,6 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
               </button>
             ))}
           </div>
-
-          <form onSubmit={handleCustomUrlSubmit} className="flex items-center gap-2">
-            <input
-              type="text"
-              value={customVideoUrlInput}
-              onChange={(e) => setCustomVideoUrlInput(e.target.value)}
-              placeholder="유튜브 영상 URL 직접 입력 후 엔터..."
-              className="flex-1 bg-black/50 border border-amber-500/40 rounded-xl px-3 py-1.5 text-xs text-white placeholder-gray-400 focus:outline-none focus:border-amber-400"
-            />
-            <button
-              type="submit"
-              className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-black text-xs shadow-md transition-all cursor-pointer shrink-0"
-            >
-              영상 교체
-            </button>
-          </form>
         </div>
       )}
 
