@@ -17,50 +17,6 @@ import {
 
 const FALLBACK_PLAYLISTS: Playlist[] = [
   {
-    id: 'pl-live-shuka-1',
-    title: '🍱 [슈카월드] 오늘의 시사경제 & 반찬 먹방 라이브',
-    author: '슈카월드 (방장)',
-    author_id: 'u-shuka',
-    category: '식사 반찬',
-    total_duration_sec: 894,
-    fork_count: 128,
-    active_watchers: 1,
-    is_live: true,
-    videos: [
-      {
-        id: 'v-shuka-1',
-        title: '전설의 주총꾼 썰 (15분 맞춤)',
-        platform: 'youtube',
-        video_id: 'JdRcM4fLwgE',
-        duration_seconds: 894,
-        thumbnail_url: 'https://i.ytimg.com/vi/JdRcM4fLwgE/hqdefault.jpg',
-        channel_title: '슈카월드'
-      }
-    ]
-  },
-  {
-    id: 'pl-live-chim-2',
-    title: '🔥 [침착맨] 혼밥러 모여라! 밥상머리 토론방',
-    author: '침착맨 (방장)',
-    author_id: 'u-chim',
-    category: '식사 반찬',
-    total_duration_sec: 780,
-    fork_count: 95,
-    active_watchers: 1,
-    is_live: true,
-    videos: [
-      {
-        id: 'v-chim-1',
-        title: '시청자 밥상머리 훈수하기',
-        platform: 'youtube',
-        video_id: 'ZHaOU6E4pWU',
-        duration_seconds: 780,
-        thumbnail_url: 'https://i.ytimg.com/vi/ZHaOU6E4pWU/hqdefault.jpg',
-        channel_title: '침착맨'
-      }
-    ]
-  },
-  {
     id: 'pl-1',
     title: '🍱 [슈카월드] 전설의 주총꾼 썰 & 15분 식사 반찬',
     author: '김철수',
@@ -719,8 +675,8 @@ export default function HomePage() {
     };
   }, []);
 
-  const loadPlaylists = async () => {
-    setLoading(true);
+  const loadPlaylists = async (isInitial: boolean = false) => {
+    if (isInitial) setLoading(true);
     const localCreated = syncLocalCreated();
     const localLive = syncLocalLiveRooms();
     const deletedIds: string[] = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('deleted_playlist_ids') || '[]') : [];
@@ -757,7 +713,7 @@ export default function HomePage() {
         return Array.from(combinedMap.values());
       });
     } finally {
-      setLoading(false);
+      if (isInitial) setLoading(false);
     }
   };
 
@@ -810,16 +766,9 @@ export default function HomePage() {
 
   useEffect(() => {
     syncLocalLiveRooms();
-    loadPlaylists();
+    loadPlaylists(true);
     loadOttScrapedFeeds();
     loadYoutubeTrending();
-
-    // Auto-poll live room list from backend every 5 seconds for all users
-    const pollInterval = setInterval(() => {
-      loadPlaylists();
-    }, 5000);
-
-    return () => clearInterval(pollInterval);
   }, []);
 
   const handleFork = async (id: string) => {

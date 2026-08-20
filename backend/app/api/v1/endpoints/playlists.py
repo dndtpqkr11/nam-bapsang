@@ -14,54 +14,7 @@ from app.core.security import decode_access_token
 
 router = APIRouter()
 
-DEFAULT_LIVE_ROOMS: List[dict] = [
-    {
-        "id": "pl-live-shuka-1",
-        "title": "🍱 [슈카월드] 오늘의 시사경제 & 반찬 먹방 라이브",
-        "author": "슈카월드 (방장)",
-        "author_id": "u-shuka",
-        "category": "식사 반찬",
-        "total_duration_sec": 894,
-        "fork_count": 128,
-        "active_watchers": 1,
-        "is_live": True,
-        "videos": [
-            {
-                "id": "v-shuka-1",
-                "title": "전설의 주총꾼 썰 (15분 맞춤)",
-                "platform": "youtube",
-                "video_id": "JdRcM4fLwgE",
-                "duration_seconds": 894,
-                "thumbnail_url": "https://img.youtube.com/vi/JdRcM4fLwgE/hqdefault.jpg",
-                "channel_title": "슈카월드"
-            }
-        ]
-    },
-    {
-        "id": "pl-live-chim-2",
-        "title": "🔥 [침착맨] 혼밥러 모여라! 밥상머리 토론방",
-        "author": "침착맨 (방장)",
-        "author_id": "u-chim",
-        "category": "식사 반찬",
-        "total_duration_sec": 780,
-        "fork_count": 95,
-        "active_watchers": 1,
-        "is_live": True,
-        "videos": [
-            {
-                "id": "v-chim-1",
-                "title": "시청자 밥상머리 훈수하기",
-                "platform": "youtube",
-                "video_id": "ZHaOU6E4pWU",
-                "duration_seconds": 780,
-                "thumbnail_url": "https://img.youtube.com/vi/ZHaOU6E4pWU/hqdefault.jpg",
-                "channel_title": "침착맨"
-            }
-        ]
-    }
-]
-
-SHARED_LIVE_ROOMS: List[dict] = list(DEFAULT_LIVE_ROOMS)
+SHARED_LIVE_ROOMS: List[dict] = []
 
 async def get_current_user_optional(
     authorization: Optional[str] = Header(default=None),
