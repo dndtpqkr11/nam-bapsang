@@ -277,8 +277,8 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                 <div className="relative aspect-video rounded-2xl overflow-hidden bg-black border border-white/10 shadow-2xl">
                   <iframe
                     ref={iframeRef}
-                    key={`${embedYtId}-${Math.floor(playbackTime)}`}
-                    src={`https://www.youtube.com/embed/${embedYtId}?autoplay=1&enablejsapi=1&start=${Math.max(0, Math.floor(playbackTime))}`}
+                    key={`yt-${embedYtId}`}
+                    src={`https://www.youtube.com/embed/${embedYtId}?autoplay=1&enablejsapi=1&origin=${typeof window !== 'undefined' ? window.location.origin : ''}`}
                     title={activeVid.title}
                     className="w-full h-full border-0"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"

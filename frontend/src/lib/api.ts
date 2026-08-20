@@ -115,7 +115,7 @@ export async function promoteUser(masterKey: string, email?: string): Promise<{ 
 
 export async function fetchPlaylists(targetRuntimeSec: number = 900): Promise<Playlist[]> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 3000);
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
 
   try {
     const res = await fetch(`${getApiBaseUrl()}/playlists?target_runtime=${targetRuntimeSec}`, {
