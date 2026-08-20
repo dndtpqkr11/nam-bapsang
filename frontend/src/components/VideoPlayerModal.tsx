@@ -73,7 +73,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     };
   }, [activeVid]);
 
-  // YouTube IFrame command helper
+  // YouTube IFrame command helper with listening handshake
   const sendIframeCommand = (func: string, args: any[] = []) => {
     if (iframeRef.current && iframeRef.current.contentWindow) {
       try {
@@ -81,6 +81,22 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           JSON.stringify({ event: 'command', func, args }),
           '*'
         );
+      } catch {}
+    }
+  };
+
+  const handleIframeLoad = () => {
+    if (iframeRef.current && iframeRef.current.contentWindow) {
+      try {
+        // Send listening handshake so YouTube iframe accepts postMessage commands
+        iframeRef.current.contentWindow.postMessage(JSON.stringify({ event: 'listening' }), '*');
+        const target = hostSyncTime > 0 ? hostSyncTime : playbackTime;
+        if (target > 0) {
+          iframeRef.current.contentWindow.postMessage(
+            JSON.stringify({ event: 'command', func: 'seekTo', args: [target, true] }),
+            '*'
+          );
+        }
       } catch {}
     }
   };
@@ -121,17 +137,16 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       setIsPlaying(data.isPlaying);
       setHostSyncTime(data.currentTime);
       setHostIsPlaying(data.isPlaying);
+      sendIframeCommand('seekTo', [data.currentTime, true]);
       return;
     }
 
     setHostSyncTime(data.currentTime);
     setHostIsPlaying(data.isPlaying);
 
-    // If drift is greater than 2.5 seconds, auto-align participant playback to host
+    // If drift is greater than 1.5 seconds, auto-align participant playback to host
     const drift = Math.abs(playbackTime - data.currentTime);
-    const now = Date.now();
-    if (drift > 2.5 && now - lastSyncTimeRef.current > 3000) {
-      lastSyncTimeRef.current = now;
+    if (drift > 1.5) {
       setPlaybackTime(data.currentTime);
       sendIframeCommand('seekTo', [data.currentTime, true]);
     }
@@ -284,6 +299,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                     className={`w-full h-full border-0 ${enableChat && !isHost ? 'pointer-events-none select-none' : ''}`}
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen={isHost}
+                    onLoad={handleIframeLoad}
                   />
 
                   {/* TV / Discord Stream Broadcast Mode Overlay for Participants (100% blocks clicking, pausing, scrubbing) */}

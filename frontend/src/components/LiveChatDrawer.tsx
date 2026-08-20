@@ -226,6 +226,21 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
       ws.onopen = () => {
         setIsConnected(true);
 
+        // Host immediately broadcasts initial playback state on connect
+        if (isHostRef.current && currentPlaybackInfoRef.current?.video) {
+          try {
+            ws.send(JSON.stringify({
+              type: 'PLAYBACK_UPDATE',
+              playlist_id: playlistId,
+              video: currentPlaybackInfoRef.current.video,
+              current_time: currentPlaybackInfoRef.current.currentTime || 0,
+              is_playing: currentPlaybackInfoRef.current.isPlaying ?? true,
+              host_nickname: nicknameRef.current || displayHostName,
+              sender_id: clientSessionIdRef.current
+            }));
+          } catch {}
+        }
+
         // Keep-Alive Ping every 15s
         pingInterval = setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) {
