@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, ExternalLink, Sparkles, Tv, Play, Pause, RotateCcw, FastForward, Rewind, MessageSquare, ArrowRight, ShieldCheck, Crown, Radio, CheckCircle2, Zap } from 'lucide-react';
+import { X, ExternalLink, Sparkles, Tv, Play, Pause, RotateCcw, FastForward, Rewind, MessageSquare, ArrowRight, ShieldCheck, Crown, Radio, CheckCircle2, Zap, Lock } from 'lucide-react';
 import { Video } from '@/types';
 import { triggerDeepLink, formatSecondsToMMSS } from '@/lib/deeplink';
 import { LiveChatDrawer } from './LiveChatDrawer';
@@ -278,12 +278,30 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                   <iframe
                     ref={iframeRef}
                     key={`yt-${embedYtId}`}
-                    src={`https://www.youtube.com/embed/${embedYtId}?autoplay=1&enablejsapi=1&origin=${typeof window !== 'undefined' ? window.location.origin : ''}`}
+                    src={`https://www.youtube.com/embed/${embedYtId}?autoplay=1&enablejsapi=1&controls=${enableChat && !isHost ? '0' : '1'}&disablekb=${enableChat && !isHost ? '1' : '0'}&origin=${typeof window !== 'undefined' ? window.location.origin : ''}`}
                     title={activeVid.title}
                     className="w-full h-full border-0"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen
                   />
+
+                  {/* Lock Overlay for Participants in Live Room (prevents scrubbing, pausing, clicking inside player) */}
+                  {enableChat && !isHost && (
+                    <div 
+                      className="absolute inset-0 z-20 cursor-not-allowed bg-transparent flex items-end justify-start p-3 group/overlay select-none"
+                      title="🔒 방장 전용 제어 모드: 재생/일시정지 및 시점 이동은 방장만 제어할 수 있습니다."
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSyncToast(`🔒 영상 제어는 방장(👑 ${hostNickname || '방장'})만 가능합니다.`);
+                        setTimeout(() => setSyncToast(null), 2500);
+                      }}
+                    >
+                      <div className="opacity-0 group-hover/overlay:opacity-100 transition-opacity bg-black/80 backdrop-blur-md border border-rose-500/40 text-rose-300 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-xl">
+                        <Lock className="w-3.5 h-3.5 text-rose-400" />
+                        <span>🔒 [방장 제어 모드] 영상 시점 및 재생 조작은 방장(👑 {hostNickname || '방장'}) 전용입니다.</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Host Interactive Playback Controls Bar */}
