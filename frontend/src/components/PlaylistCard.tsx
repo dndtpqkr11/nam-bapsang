@@ -134,13 +134,35 @@ export const PlaylistCard: React.FC<PlaylistCardProps> = ({
     }
   };
 
-  const currentUser = typeof window !== 'undefined' && localStorage.getItem('user')
-    ? (() => { try { return JSON.parse(localStorage.getItem('user')!); } catch { return null; } })()
-    : null;
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isMaster, setIsMaster] = useState<boolean>(false);
 
-  const isMaster = currentUser?.role === 'master';
+  useEffect(() => {
+    const checkRole = () => {
+      if (typeof window !== 'undefined') {
+        try {
+          const userStr = localStorage.getItem('user');
+          const userRole = localStorage.getItem('user_role');
+          const u = userStr ? JSON.parse(userStr) : null;
+          setCurrentUser(u);
+          const masterActive = u?.role === 'master' || userRole === 'master' || u?.email === 'master@bapsang.com' || u?.nickname === '혼밥마스터';
+          setIsMaster(Boolean(masterActive));
+        } catch {
+          setIsMaster(false);
+        }
+      }
+    };
 
-  const isUserCreated = isMaster || (currentUser && (
+    checkRole();
+    window.addEventListener('storage', checkRole);
+    window.addEventListener('auth_change', checkRole);
+    return () => {
+      window.removeEventListener('storage', checkRole);
+      window.removeEventListener('auth_change', checkRole);
+    };
+  }, []);
+
+  const isAuthor = (currentUser && (
     (playlist.author_id && playlist.author_id === `u-${currentUser.id}`) ||
     (playlist.author && playlist.author === currentUser.nickname) ||
     (playlist.author && playlist.author === `${currentUser.nickname} (방장)`) ||
@@ -150,6 +172,8 @@ export const PlaylistCard: React.FC<PlaylistCardProps> = ({
     playlist.id.startsWith('pl-my-') || 
     playlist.id.startsWith('pl-live-user-')
   );
+
+  const canDelete = Boolean(isMaster || isAuthor);
 
   // Meal duration tag badge
   const durationSec = playlist.total_duration_sec || 0;
@@ -181,7 +205,7 @@ export const PlaylistCard: React.FC<PlaylistCardProps> = ({
                 <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                 <span className="truncate">방장: {playlist.author || '독고다이'}</span>
               </span>
-              <RealtimeBadge playlistId={playlist.id} initialWatchers={playlist.active_watchers || 1} isJoined={isJoined} />
+              <RealtimeBadge playlistId={playlist.id} initialWatchers={playlist.active_watchers ?? 0} isJoined={isJoined} />
             </>
           ) : (
             <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border shadow-inner ${durTag.color}`}>
@@ -200,7 +224,7 @@ export const PlaylistCard: React.FC<PlaylistCardProps> = ({
             <Share2 className="w-3.5 h-3.5" />
           </button>
 
-          {isUserCreated && onEditPlaylist && (
+          {isAuthor && onEditPlaylist && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -213,18 +237,23 @@ export const PlaylistCard: React.FC<PlaylistCardProps> = ({
             </button>
           )}
 
-          {isUserCreated && onDeletePlaylist && (
+          {canDelete && onDeletePlaylist && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                if (window.confirm('정말 이 방/반찬을 삭제하시겠습니까?')) {
+                if (window.confirm(isMaster ? '👑 [마스터 관리자] 정말 이 반찬/플레이리스트를 전체 멸실 삭제하시겠습니까?' : '정말 이 방/반찬을 삭제하시겠습니까?')) {
                   onDeletePlaylist(playlist.id);
                 }
               }}
-              title="내가 개설한 방/반찬 삭제"
-              className="p-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/30 text-red-400 border border-red-500/30 text-xs font-bold transition-all cursor-pointer"
+              title={isMaster ? "👑 [마스터 관리자] 전체 삭제 권한" : "내가 개설한 방/반찬 삭제"}
+              className={`p-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                isMaster
+                  ? 'bg-red-600/40 hover:bg-red-600/80 text-red-200 border border-red-500/60 shadow-lg shadow-red-950/50'
+                  : 'bg-red-500/15 hover:bg-red-500/30 text-red-400 border border-red-500/30'
+              }`}
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-3.5 h-3.5 text-red-300" />
+              {isMaster && <span className="text-[10px] font-black text-red-200">삭제</span>}
             </button>
           )}
 

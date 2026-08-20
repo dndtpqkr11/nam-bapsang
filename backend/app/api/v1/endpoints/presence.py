@@ -95,8 +95,7 @@ class ConnectionManager:
         await self.broadcast_count(playlist_id)
 
     async def get_watcher_count(self, playlist_id: str) -> int:
-        count = len(self.room_client_sockets.get(playlist_id, {}))
-        return max(1, count) if playlist_id in self.active_connections else count
+        return len(self.room_client_sockets.get(playlist_id, {}))
 
     async def broadcast_count(self, playlist_id: str):
         count = await self.get_watcher_count(playlist_id)

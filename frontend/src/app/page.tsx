@@ -621,6 +621,7 @@ export default function HomePage() {
   const [submittingModal, setSubmittingModal] = useState<boolean>(false);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [authVersion, setAuthVersion] = useState<number>(0);
 
   useEffect(() => {
     if (isModalOpen || isOttModalOpen) {
@@ -649,56 +650,66 @@ export default function HomePage() {
   };
 
   useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'user_live_rooms') {
-        try {
-          const fresh = e.newValue ? JSON.parse(e.newValue) : [];
-          setUserLiveRooms(fresh);
-        } catch {}
-      }
-      if (e.key === 'my_created_playlists') {
-        try {
-          const fresh = e.newValue ? JSON.parse(e.newValue) : [];
-          setMyCreatedPlaylists(fresh);
-        } catch {}
+    const handleStorageChange = (e?: StorageEvent | Event) => {
+      setAuthVersion((v) => v + 1);
+      if (e && 'key' in e) {
+        if (e.key === 'user_live_rooms') {
+          try {
+            const fresh = e.newValue ? JSON.parse(e.newValue) : [];
+            setUserLiveRooms(fresh);
+          } catch {}
+        }
+        if (e.key === 'my_created_playlists') {
+          try {
+            const fresh = e.newValue ? JSON.parse(e.newValue) : [];
+            setMyCreatedPlaylists(fresh);
+          } catch {}
+        }
       }
     };
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    window.addEventListener('auth_change', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('auth_change', handleStorageChange);
+    };
   }, []);
 
   const loadPlaylists = async () => {
     setLoading(true);
     const localCreated = syncLocalCreated();
     const localLive = syncLocalLiveRooms();
+    const deletedIds: string[] = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('deleted_playlist_ids') || '[]') : [];
+
     try {
       const data = await fetchPlaylists(900);
       if (data && data.length > 0) {
         // Extract shared live rooms created by any user from backend
-        const sharedLive = data.filter((pl) => (pl as any).is_live || pl.id.startsWith('pl-live-'));
+        const filteredData = data.filter((pl) => !deletedIds.includes(String(pl.id)));
+        const sharedLive = filteredData.filter((pl) => (pl as any).is_live || pl.id.startsWith('pl-live-'));
         setUserLiveRooms(() => {
           const combinedMap = new Map<string, Playlist>();
-          [...sharedLive, ...localLive].forEach((item) => combinedMap.set(String(item.id), item));
+          [...sharedLive, ...localLive.filter(pl => !deletedIds.includes(String(pl.id)))].forEach((item) => combinedMap.set(String(item.id), item));
           return Array.from(combinedMap.values());
         });
         setPlaylists(() => {
           const combinedMap = new Map<string, Playlist>();
-          [...localCreated, ...data].forEach((pl) => combinedMap.set(String(pl.id), pl));
+          [...localCreated.filter(pl => !deletedIds.includes(String(pl.id))), ...filteredData].forEach((pl) => combinedMap.set(String(pl.id), pl));
           return Array.from(combinedMap.values());
         });
       } else {
-        setUserLiveRooms(localLive);
+        setUserLiveRooms(localLive.filter(pl => !deletedIds.includes(String(pl.id))));
         setPlaylists(() => {
           const combinedMap = new Map<string, Playlist>();
-          [...localCreated, ...FALLBACK_PLAYLISTS].forEach((pl) => combinedMap.set(String(pl.id), pl));
+          [...localCreated.filter(pl => !deletedIds.includes(String(pl.id))), ...FALLBACK_PLAYLISTS.filter(pl => !deletedIds.includes(String(pl.id)))].forEach((pl) => combinedMap.set(String(pl.id), pl));
           return Array.from(combinedMap.values());
         });
       }
     } catch {
-      setUserLiveRooms(localLive);
+      setUserLiveRooms(localLive.filter(pl => !deletedIds.includes(String(pl.id))));
       setPlaylists(() => {
         const combinedMap = new Map<string, Playlist>();
-        [...localCreated, ...FALLBACK_PLAYLISTS].forEach((pl) => combinedMap.set(String(pl.id), pl));
+        [...localCreated.filter(pl => !deletedIds.includes(String(pl.id))), ...FALLBACK_PLAYLISTS.filter(pl => !deletedIds.includes(String(pl.id)))].forEach((pl) => combinedMap.set(String(pl.id), pl));
         return Array.from(combinedMap.values());
       });
     } finally {
@@ -832,6 +843,23 @@ export default function HomePage() {
       await deletePlaylist(playlistId);
     } catch {}
 
+    if (typeof window !== 'undefined') {
+      try {
+        let deletedIds: string[] = JSON.parse(localStorage.getItem('deleted_playlist_ids') || '[]');
+        if (!deletedIds.includes(playlistId)) {
+          deletedIds.push(playlistId);
+          localStorage.setItem('deleted_playlist_ids', JSON.stringify(deletedIds));
+        }
+        let savedRecIds: string[] = JSON.parse(localStorage.getItem('recommended_playlist_ids') || '[]');
+        savedRecIds = savedRecIds.filter(id => id !== playlistId);
+        localStorage.setItem('recommended_playlist_ids', JSON.stringify(savedRecIds));
+
+        let savedRecObjs: Playlist[] = JSON.parse(localStorage.getItem('recommended_playlists_objects') || '[]');
+        savedRecObjs = savedRecObjs.filter(p => p.id !== playlistId);
+        localStorage.setItem('recommended_playlists_objects', JSON.stringify(savedRecObjs));
+      } catch {}
+    }
+
     const updatedCreated = myCreatedPlaylists.filter(pl => pl.id !== playlistId);
     setMyCreatedPlaylists(updatedCreated);
 
@@ -858,7 +886,8 @@ export default function HomePage() {
       setPlayingVideoState(null);
     }
 
-    showToast('🗑️ 내 보관함 및 라이브 목록에서 방/반찬이 삭제되었습니다.');
+    const isMaster = typeof window !== 'undefined' && localStorage.getItem('user') && JSON.parse(localStorage.getItem('user')!).role === 'master';
+    showToast(isMaster ? '👑 [마스터 관리자] 밥상이 전체 피드 및 보관함에서 영구 멸실 삭제되었습니다.' : '🗑️ 내 보관함 및 라이브 목록에서 방/반찬이 삭제되었습니다.');
   };
 
   const handleDeleteVideoFromPlaylist = (playlistId: string, videoIndex: number) => {
@@ -965,7 +994,7 @@ export default function HomePage() {
           ...createdPl,
           author: myNickname,
           author_id: 'u-me',
-          active_watchers: 1
+          active_watchers: 0
         };
 
         setUserLiveRooms((prev) => {
@@ -1013,7 +1042,7 @@ export default function HomePage() {
           category: '식사 반찬',
           total_duration_sec: totalSec,
           fork_count: 0,
-          active_watchers: 1,
+          active_watchers: 0,
           videos: finalVideos
         };
 
@@ -1094,7 +1123,7 @@ export default function HomePage() {
         category: '식사 반찬',
         total_duration_sec: totalSec,
         fork_count: 0,
-        active_watchers: 1,
+        active_watchers: 0,
         videos: finalVideos
       };
 
@@ -1193,7 +1222,7 @@ export default function HomePage() {
         video={playingVideoState?.video || null}
         enableChat={!!playingVideoState?.isLive}
         playlistId={playingVideoState?.playlistId || playingVideoState?.video?.id || 'pl-1'}
-        initialWatchers={playingVideoState?.initialWatchers || 38}
+        initialWatchers={playingVideoState?.initialWatchers ?? 0}
         isHost={playingVideoState?.isHost || false}
         hostNickname={playingVideoState?.hostNickname}
         onDeleteLiveRoom={(id) => handleDeleteLiveRoom(id)}
@@ -1428,7 +1457,7 @@ export default function HomePage() {
                         video: v, 
                         isLive: true, 
                         playlistId: pl.id,
-                        initialWatchers: pl.active_watchers || 1,
+                        initialWatchers: pl.active_watchers ?? 0,
                         isHost: isUserCreatedRoom,
                         hostNickname: pl.author || '방장'
                       })} 
@@ -1558,6 +1587,57 @@ export default function HomePage() {
             </div>
           </div>
 
+          {/* Master Mode Banner for Instant Deletion Guidance */}
+          {(() => {
+            const isMasterActive = typeof window !== 'undefined' && (
+              localStorage.getItem('user_role') === 'master' ||
+              (localStorage.getItem('user') && (() => { try { return JSON.parse(localStorage.getItem('user')!).role === 'master'; } catch { return false; } })())
+            );
+
+            return isMasterActive ? (
+              <div className="p-3.5 rounded-2xl bg-red-950/60 border border-red-500/60 flex items-center justify-between text-xs text-red-200 shadow-xl animate-fade-in flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <Crown className="w-4 h-4 text-amber-400 shrink-0 animate-bounce" />
+                  <span className="font-bold">👑 [마스터 관리자 권한 적용 중] 아래 모든 반찬 카드 우측 상단에 붉은색 <strong className="text-white bg-red-600 px-1.5 py-0.5 rounded ml-1">[🗑️ 삭제]</strong> 버튼이 활성화되어 있습니다.</span>
+                </div>
+                <span className="px-2.5 py-1 rounded-lg bg-red-600 text-white font-mono text-[11px] font-black shrink-0">MASTER ON</span>
+              </div>
+            ) : (
+              <div className="p-2.5 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between text-xs text-gray-400 flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span>💡 마스터 관리자 인증 시 다른 유저의 반찬도 전체 멸실 삭제할 수 있습니다.</span>
+                </div>
+                <button
+                  onClick={() => {
+                    const pass = window.prompt('👑 마스터 관리자 보안키를 입력하세요 (예: MASTER2026):');
+                    if (pass === 'MASTER2026') {
+                      localStorage.setItem('user_role', 'master');
+                      const existingUser = localStorage.getItem('user');
+                      if (existingUser) {
+                        try {
+                          const u = JSON.parse(existingUser);
+                          u.role = 'master';
+                          localStorage.setItem('user', JSON.stringify(u));
+                        } catch {}
+                      } else {
+                        localStorage.setItem('user', JSON.stringify({ nickname: '혼밥마스터', email: 'master@bapsang.com', role: 'master' }));
+                      }
+                      window.dispatchEvent(new Event('storage'));
+                      window.dispatchEvent(new Event('auth_change'));
+                      showToast('👑 마스터 관리자 권한이 활성화되었습니다! 모든 반찬 카드의 멸실 삭제 버튼이 켜졌습니다.');
+                    } else if (pass !== null) {
+                      alert('❌ 올바르지 않은 마스터 보안키입니다. (MASTER2026)');
+                    }
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-[11px] font-black cursor-pointer transition-all shrink-0"
+                >
+                  👑 마스터 인증
+                </button>
+              </div>
+            );
+          })()}
+
           {/* Conditional rendering for unlinked OTT vs connected OTT list */}
           {selectedOttTab !== 'all' && !savedOttsState.includes(selectedOttTab) ? (
             <div className="p-8 sm:p-12 rounded-3xl bg-gradient-to-tr from-slate-900/90 via-slate-800/80 to-slate-900/90 border border-cyan-500/40 text-center space-y-5 shadow-2xl">
@@ -1594,6 +1674,8 @@ export default function HomePage() {
                     playlist={pl} 
                     onFork={() => handleFork(pl.id)} 
                     onPlayVideo={(v) => setPlayingVideoState({ video: v, isLive: false })} 
+                    onDeletePlaylist={handleDeletePlaylist}
+                    onDeleteVideo={handleDeleteVideoFromPlaylist}
                     showLiveBadge={false}
                   />
                 ))}

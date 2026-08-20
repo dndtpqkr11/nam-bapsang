@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Users } from 'lucide-react';
-import { getClientSessionId } from '@/lib/api';
 
 interface RealtimeBadgeProps {
   playlistId: string;
@@ -10,116 +9,67 @@ interface RealtimeBadgeProps {
   isJoined?: boolean;
 }
 
+function getApiBaseUrl(): string {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    const port = window.location.port;
+    if (host === 'localhost' || host === '127.0.0.1' || port === '3000' || port === '3001') {
+      return `http://${host}:8000/api/v1`;
+    }
+  }
+  return 'https://nam-bapsang-backend.onrender.com/api/v1';
+}
+
 export const RealtimeBadge: React.FC<RealtimeBadgeProps> = ({ 
   playlistId, 
-  initialWatchers = 1,
+  initialWatchers = 0,
   isJoined = false
 }) => {
-  const [watchers, setWatchers] = useState<number>(initialWatchers || 1);
-  const [connected, setConnected] = useState<boolean>(false);
-  const wsRef = useRef<WebSocket | null>(null);
+  const [watchers, setWatchers] = useState<number>(initialWatchers ?? 0);
 
   useEffect(() => {
-    setWatchers(initialWatchers || 1);
-    if (isJoined) {
-      setConnected(true);
-      return;
-    }
+    setWatchers(initialWatchers ?? 0);
 
-    const getWebSocketUrl = (roomId: string): string => {
-      let base = '';
-      if (process.env.NEXT_PUBLIC_WS_URL) {
-        base = `${process.env.NEXT_PUBLIC_WS_URL}/ws/${roomId}`;
-      } else if (typeof window !== 'undefined') {
-        const host = window.location.hostname;
-        const port = window.location.port;
-        if (host === 'localhost' || host === '127.0.0.1' || port === '3000' || port === '3001') {
-          base = `ws://${host}:8000/ws/${roomId}`;
-        } else {
-          base = `wss://nam-bapsang-backend.onrender.com/ws/${roomId}`;
+    let isMounted = true;
+    const fetchWatcherCount = async () => {
+      try {
+        const res = await fetch(`${getApiBaseUrl()}/presence/${playlistId}/count`, { cache: 'no-store' });
+        if (res.ok) {
+          const json = await res.json();
+          if (isMounted && typeof json.active_watchers === 'number') {
+            setWatchers(json.active_watchers);
+          }
         }
-      } else {
-        base = `wss://nam-bapsang-backend.onrender.com/ws/${roomId}`;
+      } catch (e) {
+        // ignore fetch failure
       }
-      return `${base}?client_id=${encodeURIComponent(getClientSessionId())}`;
     };
 
-    const wsUrl = getWebSocketUrl(playlistId);
-    let timer: NodeJS.Timeout | null = null;
-    let reconnectTimer: NodeJS.Timeout | null = null;
-    let isMounted = true;
-
-    function connectWebSocket() {
-      try {
-        const ws = new WebSocket(wsUrl);
-        wsRef.current = ws;
-
-        ws.onopen = () => {
-          if (!isMounted) return;
-          setConnected(true);
-          timer = setInterval(() => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-              ws.send('ping');
-            }
-          }, 15000);
-        };
-
-        ws.onmessage = (event) => {
-          if (!isMounted) return;
-          try {
-            const data = JSON.parse(event.data);
-            if (data.type === 'PRESENCE_UPDATE' && typeof data.active_watchers === 'number') {
-              // 실제 동시 접속자 수 100% 실시간 표기
-              setWatchers(data.active_watchers);
-            }
-          } catch (e) {
-            // ignore non-json messages
-          }
-        };
-
-        ws.onclose = () => {
-          if (!isMounted) return;
-          setConnected(false);
-          if (timer) clearInterval(timer);
-          reconnectTimer = setTimeout(() => {
-            if (isMounted) connectWebSocket();
-          }, 3000);
-        };
-
-        ws.onerror = () => {
-          if (!isMounted) return;
-          setConnected(false);
-          ws.close();
-        };
-      } catch (e) {
-        if (!isMounted) return;
-        setConnected(false);
-      }
-    }
-
-    connectWebSocket();
+    fetchWatcherCount();
+    const interval = setInterval(fetchWatcherCount, 3000);
 
     return () => {
       isMounted = false;
-      if (timer) clearInterval(timer);
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
+      clearInterval(interval);
     };
-  }, [playlistId]);
+  }, [playlistId, initialWatchers]);
+
+  const isActive = watchers > 0 || isJoined;
 
   return (
     <div
       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-all duration-300 ${
-        connected || isJoined
+        isActive
           ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400'
           : 'bg-gray-500/10 border border-gray-500/20 text-gray-400'
       }`}
     >
       <span
         className={`w-2 h-2 rounded-full ${
-          connected || isJoined ? 'bg-emerald-400 animate-pulse shadow-[0_0_8px_#22C55E]' : 'bg-gray-500'
+          isActive ? 'bg-emerald-400 animate-pulse shadow-[0_0_8px_#22C55E]' : 'bg-gray-500'
         }`}
       />
       <Users className="w-3.5 h-3.5" />

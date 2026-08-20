@@ -61,7 +61,7 @@ export default function CreatePlaylistPage() {
         category,
         total_duration_sec: totalSec,
         fork_count: 0,
-        active_watchers: 1,
+        active_watchers: 0,
         videos
       };
 

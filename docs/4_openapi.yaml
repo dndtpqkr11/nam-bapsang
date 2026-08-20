@@ -1,0 +1,662 @@
+openapi: 3.1.0
+info:
+  title: 남이 차린 밥상 (Nam-Bapsang) Live Production API Specification
+  description: 'SKALA Full-stack Engineering 웹 서비스 개발 Mini Project (지도강사: 권기창 강사님)
+
+    Render 클라우드 실서버에서 100% 구동 중인 실체 API (REST & Realtime WebSocket) 규격서입니다.'
+  version: 1.0.0
+  contact:
+    name: 박세웅 (Full-Stack Engineer)
+    email: master@bapsang.com
+paths:
+  /api/v1/auth/signup:
+    post:
+      tags:
+      - Auth & Profile
+      summary: Signup
+      description: 신규 회원가입 및 PostgreSQL DB 저장 (단 1개의 마스터 계정만 허용)
+      operationId: signup_api_v1_auth_signup_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/login:
+    post:
+      tags:
+      - Auth & Profile
+      summary: Login
+      description: '로그인 및 JWT Access Token 발급 (기본 마스터 계정: master@bapsang.com / master123)'
+      operationId: login_api_v1_auth_login_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/me:
+    get:
+      tags:
+      - Auth & Profile
+      summary: Get My Profile
+      description: 내 프로필 정보 조회
+      operationId: get_my_profile_api_v1_auth_me_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/videos/search:
+    get:
+      tags:
+      - Videos & DeepLink
+      summary: Search Youtube
+      description: 유튜브 검색창 키워드 연동 및 영상 긁어오기 API
+      operationId: search_youtube_api_v1_videos_search_get
+      parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+          description: 유튜브 검색 키워드 또는 URL
+          title: Q
+        description: 유튜브 검색 키워드 또는 URL
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/videos/trending:
+    get:
+      tags:
+      - Videos & DeepLink
+      summary: Get Youtube Trending
+      description: 유튜브 알고리즘 실시간 인기 동영상 순위 모음 반환 (yt-dlp 실시간 스크래퍼)
+      operationId: get_youtube_trending_api_v1_videos_trending_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/v1/videos/parse:
+    post:
+      tags:
+      - Videos & DeepLink
+      summary: Parse Video Url
+      description: '1. 유튜브/OTT URL에서 비디오 ID 추출
+
+        2. yt-dlp 실시간 스크래핑으로 100% 실제 러닝타임 및 제목 추출
+
+        3. PostgreSQL DB 캐시 저장 및 동기화'
+      operationId: parse_video_url_api_v1_videos_parse_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VideoParseRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/videos/{platform}/{content_id}/redirect:
+    get:
+      tags:
+      - Videos & DeepLink
+      summary: Get Deeplink Redirect
+      description: 영상 클릭 시 원본 앱/웹 딥링크 라우팅 정보 반환 (트래픽 0%)
+      operationId: get_deeplink_redirect_api_v1_videos__platform___content_id__redirect_get
+      parameters:
+      - name: platform
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Platform
+      - name: content_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Content Id
+      - name: user-agent
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: User-Agent
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/playlists:
+    get:
+      tags:
+      - Playlists & Fork
+      summary: List Playlists
+      description: PostgreSQL DB 및 공유 라이브 피드에서 플레이리스트 피드를 조회합니다.
+      operationId: list_playlists_api_v1_playlists_get
+      parameters:
+      - name: target_runtime
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: 목표 런타임 (초 단위, 기본 900초=15분)
+          default: 900
+          title: Target Runtime
+        description: 목표 런타임 (초 단위, 기본 900초=15분)
+      - name: category
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - Playlists & Fork
+      summary: Create Playlist
+      description: 새로운 15분 식사 맞춤 밥상(플레이리스트)을 생성하고 JWT 작성자 할당 후 저장합니다.
+      operationId: create_playlist_api_v1_playlists_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePlaylistRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/playlists/{playlist_id}:
+    get:
+      tags:
+      - Playlists & Fork
+      summary: Get Playlist Detail
+      description: 플레이리스트 상세 정보 조회
+      operationId: get_playlist_detail_api_v1_playlists__playlist_id__get
+      parameters:
+      - name: playlist_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Playlist Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - Playlists & Fork
+      summary: Delete Playlist
+      description: 내가 차린 밥상(플레이리스트) 및 공유 라이브 방 삭제 API (JWT 인증 및 작성자 검증 적용)
+      operationId: delete_playlist_api_v1_playlists__playlist_id__delete
+      parameters:
+      - name: playlist_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Playlist Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/playlists/{playlist_id}/fork:
+    post:
+      tags:
+      - Playlists & Fork
+      summary: Fork Playlist
+      description: 타 유저의 플레이리스트 원터치 포크 (PostgreSQL DB fork_count 업데이트 및 복제 생성)
+      operationId: fork_playlist_api_v1_playlists__playlist_id__fork_post
+      parameters:
+      - name: playlist_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Playlist Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/presence/{playlist_id}/count:
+    get:
+      tags:
+      - Realtime Presence (합석 모드)
+      summary: Get Active Watchers Count
+      description: Redis 인메모리 캐시 기반 현재 합석 동시 시청자 수 집계
+      operationId: get_active_watchers_count_api_v1_presence__playlist_id__count_get
+      parameters:
+      - name: playlist_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Playlist Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/recommendations/mealtime:
+    get:
+      tags:
+      - ML Curation
+      summary: Get Mealtime Recommendations
+      description: Pandas 전처리를 활용하여 목표 식사 시간(15분 ± 3분)에 가장 부합하는 플레이리스트 피드를 반환합니다.
+      operationId: get_mealtime_recommendations_api_v1_recommendations_mealtime_get
+      parameters:
+      - name: target_sec
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: 목표 식사 시간(초 단위, 기본 900초=15분)
+          default: 900
+          title: Target Sec
+        description: 목표 식사 시간(초 단위, 기본 900초=15분)
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/recommendations/cluster:
+    get:
+      tags:
+      - ML Curation
+      summary: Get Cluster Recommendations
+      description: TensorFlow 유저 임베딩 및 군집화(Clustering) 모델 기반 맞춤 추천 피드를 반환합니다.
+      operationId: get_cluster_recommendations_api_v1_recommendations_cluster_get
+      parameters:
+      - name: user_id
+        in: query
+        required: false
+        schema:
+          type: integer
+          description: 유저 ID
+          default: 1
+          title: User Id
+        description: 유저 ID
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ott/recommendations:
+    get:
+      tags:
+      - OTT Crawler & Curation
+      summary: Get Ott Crawled Recommendations
+      description: '연동된 OTT 서비스(유튜브, 넷플릭스, 티빙, 쿠팡플레이, 디즈니+, 웨이브)에서
+
+        실시간으로 긁어온 15분 맞춤 밥상 큐레이션 결과를 반환합니다.'
+      operationId: get_ott_crawled_recommendations_api_v1_ott_recommendations_get
+      parameters:
+      - name: platforms
+        in: query
+        required: false
+        schema:
+          type: string
+          description: 쉼표로 구분된 연동 OTT 플랫폼 목록
+          default: youtube,netflix
+          title: Platforms
+        description: 쉼표로 구분된 연동 OTT 플랫폼 목록
+      - name: target_runtime
+        in: query
+        required: false
+        schema:
+          type: integer
+          description: 목표 러닝타임(초)
+          default: 900
+          title: Target Runtime
+        description: 목표 러닝타임(초)
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /:
+    get:
+      summary: Root
+      operationId: root__get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /ws/{playlist_id}:
+    get:
+      tags:
+      - Realtime WebSocket (실시간 라이브 합석)
+      summary: 실시간 라이브 대화 및 재생 시간 동기화 WebSocket
+      description: '- PRESENCE_UPDATE: 실시간 동시 합석 시청자 수 집계
+
+        - CHAT_HISTORY: 최근 50개 대화 메시지 복원
+
+        - CHAT_MESSAGE: 메시지 전송 및 멀티캐스트
+
+        - SYNC_VIDEO_STATE: 방장 재생 경과시간(start=180s) 동기화
+
+        - HOST_CHANGE_VIDEO: 방장 리드 멀티캐스트 비디오 교체'
+      parameters:
+      - name: playlist_id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '101':
+          description: WebSocket 업그레이드 프로토콜 성공 (Switching Protocols)
+components:
+  schemas:
+    CreatePlaylistRequest:
+      properties:
+        title:
+          type: string
+          title: Title
+        category:
+          type: string
+          title: Category
+        videos:
+          items:
+            $ref: '#/components/schemas/CreateVideoItemRequest'
+          type: array
+          title: Videos
+        author_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Author Name
+          default: 독고다이
+        is_live:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Is Live
+          default: false
+      type: object
+      required:
+      - title
+      - category
+      - videos
+      title: CreatePlaylistRequest
+    CreateVideoItemRequest:
+      properties:
+        title:
+          type: string
+          title: Title
+        platform:
+          type: string
+          title: Platform
+        video_id:
+          type: string
+          title: Video Id
+        duration_seconds:
+          type: integer
+          title: Duration Seconds
+        thumbnail_url:
+          type: string
+          title: Thumbnail Url
+        channel_title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Channel Title
+          default: 추천 채널
+      type: object
+      required:
+      - title
+      - platform
+      - video_id
+      - duration_seconds
+      - thumbnail_url
+      title: CreateVideoItemRequest
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    LoginRequest:
+      properties:
+        email:
+          type: string
+          title: Email
+        password:
+          type: string
+          title: Password
+      type: object
+      required:
+      - email
+      - password
+      title: LoginRequest
+    SignupRequest:
+      properties:
+        email:
+          type: string
+          title: Email
+        password:
+          type: string
+          title: Password
+        nickname:
+          type: string
+          title: Nickname
+        master_key:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Master Key
+      type: object
+      required:
+      - email
+      - password
+      - nickname
+      title: SignupRequest
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+    VideoParseRequest:
+      properties:
+        url:
+          type: string
+          title: Url
+      type: object
+      required:
+      - url
+      title: VideoParseRequest
+servers:
+- url: https://nam-bapsang-backend.onrender.com
+  description: Render Production Cloud Server (실서버)
+- url: http://localhost:8000
+  description: Local Development Server (개발 서버)

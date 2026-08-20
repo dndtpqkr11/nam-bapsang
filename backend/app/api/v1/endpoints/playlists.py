@@ -62,7 +62,13 @@ async def list_playlists(
     """
     PostgreSQL DB 및 공유 라이브 피드에서 플레이리스트 피드를 조회합니다.
     """
-    formatted_data = list(SHARED_LIVE_ROOMS)
+    from app.api.v1.endpoints.presence import manager
+
+    formatted_data = []
+    for r in SHARED_LIVE_ROOMS:
+        r_copy = dict(r)
+        r_copy["active_watchers"] = await manager.get_watcher_count(r["id"])
+        formatted_data.append(r_copy)
 
     if db is not None:
         try:
@@ -82,6 +88,7 @@ async def list_playlists(
                     continue
                 pl_id = f"pl-{pl.id}"
                 if not any(r["id"] == pl_id for r in formatted_data):
+                    watchers_cnt = await manager.get_watcher_count(pl_id)
                     formatted_data.append({
                         "id": pl_id,
                         "title": pl.title,
@@ -90,7 +97,7 @@ async def list_playlists(
                         "category": pl.category,
                         "total_duration_sec": pl.total_duration_sec,
                         "fork_count": pl.fork_count,
-                        "active_watchers": 12,
+                        "active_watchers": watchers_cnt,
                         "videos": [
                             {
                                 "id": f"v-{item.video.id}",
@@ -161,7 +168,7 @@ async def create_playlist(
             "category": payload.category,
             "total_duration_sec": total_duration,
             "fork_count": 0,
-            "active_watchers": 1,
+            "active_watchers": 0,
             "is_live": payload.is_live,
             "videos": created_videos
         }
@@ -179,6 +186,31 @@ async def create_playlist(
                     fork_count=0
                 )
                 db.add(new_playlist)
+                await db.flush()
+
+                for idx, v in enumerate(payload.videos):
+                    stmt_v = select(VideoModel).where(VideoModel.video_id == v.video_id, VideoModel.platform == v.platform)
+                    res_v = await db.execute(stmt_v)
+                    existing_v = res_v.scalars().first()
+                    if not existing_v:
+                        existing_v = VideoModel(
+                            platform=v.platform,
+                            video_id=v.video_id,
+                            title=v.title,
+                            thumbnail_url=v.thumbnail_url,
+                            duration_seconds=v.duration_seconds,
+                            channel_title=v.channel_title or "추천 채널"
+                        )
+                        db.add(existing_v)
+                        await db.flush()
+
+                    item = PlaylistItem(
+                        playlist_id=new_playlist.id,
+                        video_id=existing_v.id,
+                        sequence_order=idx
+                    )
+                    db.add(item)
+
                 await db.commit()
             except Exception as db_err:
                 try:
@@ -229,7 +261,10 @@ async def get_playlist_detail(playlist_id: str, db: AsyncSession = Depends(get_d
     # 1. 인메모리 라이브 방 조회
     target_room = next((r for r in SHARED_LIVE_ROOMS if r["id"] == playlist_id), None)
     if target_room:
-        return {"success": True, "data": target_room}
+        from app.api.v1.endpoints.presence import manager
+        r_copy = dict(target_room)
+        r_copy["active_watchers"] = await manager.get_watcher_count(playlist_id)
+        return {"success": True, "data": r_copy}
 
     # 2. DB 플레이리스트 조회
     try:

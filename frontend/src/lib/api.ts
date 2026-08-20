@@ -42,12 +42,12 @@ function getAuthHeaders(): Record<string, string> {
   return headers;
 }
 
-export async function loginUser(email: string, password: string): Promise<{ access_token: string; user: any }> {
+export async function loginUser(email: string, password: string, masterKey?: string): Promise<{ access_token: string; user: any }> {
   try {
     const res = await fetch(`${getApiBaseUrl()}/auth/login`, {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify({ email, password })
+      body: JSON.stringify({ email, password, master_key: masterKey })
     });
     if (!res.ok) {
       const err = await res.json();
@@ -56,9 +56,10 @@ export async function loginUser(email: string, password: string): Promise<{ acce
     return await res.json();
   } catch (err: any) {
     if (err.message && err.message !== 'Failed to fetch') throw err;
+    const isMasterRole = masterKey === 'MASTER2026' || email === 'master@bapsang.com';
     return {
       access_token: 'demo-jwt-token',
-      user: { id: 'u-1', nickname: '혼밥마스터', email, role: email === 'master@bapsang.com' ? 'master' : 'user' }
+      user: { id: 'u-1', nickname: email.split('@')[0] || '혼밥마스터', email, role: isMasterRole ? 'master' : 'user' }
     };
   }
 }
@@ -81,6 +82,34 @@ export async function signupUser(email: string, password: string, nickname: stri
       access_token: 'demo-jwt-token',
       user: { id: 'u-new', nickname, email, role: masterKey === 'MASTER2026' ? 'master' : 'user' }
     };
+  }
+}
+
+export async function promoteUser(masterKey: string, email?: string): Promise<{ access_token: string; user: any }> {
+  try {
+    const res = await fetch(`${getApiBaseUrl()}/auth/promote`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ master_key: masterKey, email })
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || '마스터 승격 실패');
+    }
+    return await res.json();
+  } catch (err: any) {
+    if (masterKey === 'MASTER2026') {
+      const savedUser = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
+      let parsed = { nickname: '혼밥마스터', email: email || 'master@bapsang.com' };
+      if (savedUser) {
+        try { parsed = JSON.parse(savedUser); } catch {}
+      }
+      return {
+        access_token: 'master-jwt-token',
+        user: { ...parsed, role: 'master' }
+      };
+    }
+    throw new Error('마스터 보안키가 일치하지 않습니다. (MASTER2026)');
   }
 }
 

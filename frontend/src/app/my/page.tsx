@@ -396,6 +396,8 @@ export default function MyPage() {
                       playlist={pl} 
                       onFork={() => {}} 
                       onPlayVideo={(v) => setPlayingVideo(v)}
+                      onDeletePlaylist={handleDeletePlaylist}
+                      onDeleteVideo={handleDeleteVideo}
                     />
                   ))}
                 </div>

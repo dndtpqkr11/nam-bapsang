@@ -1,0 +1,62 @@
+// Nam-Bapsang Real Production Database ERD Schema (.dbml)
+// 백엔드 SQLAlchemy 실증 코드(backend/app/models) 100% 일치 진품 스키마
+
+Table users {
+  id integer [pk, increment, note: '유저 PK 식별자']
+  email varchar(255) [unique, not null, note: '로그인 이메일 계정']
+  hashed_password varchar(255) [not null, note: 'Bcrypt 암호화 비밀번호']
+  nickname varchar(100) [not null, note: '사용자 닉네임']
+  role varchar(20) [not null, default: 'user', note: '계정 권한 (user / master)']
+  total_fork_earned integer [default: 0, note: '획득한 포크/추천 수']
+  created_at timestamp [default: 'now()', note: '계정 생성시각']
+
+  Indexes {
+    email [name: 'idx_users_email']
+    id [name: 'idx_users_id']
+  }
+}
+
+Table playlists {
+  id integer [pk, increment, note: '밥상 PK 식별자']
+  title varchar(255) [not null, note: '밥상 제목']
+  category varchar(100) [default: '점심식사', note: '식사 카테고리']
+  author_id integer [not null, note: '작성자 유저 FK (users.id)']
+  total_duration_sec integer [default: 0, note: '총 러닝타임 초']
+  fork_count integer [default: 0, note: '추천 수']
+  forked_from_id integer [null, note: '포크 원본 밥상 FK (playlists.id)']
+  created_at timestamp [default: 'now()', note: '생성시각']
+
+  Indexes {
+    author_id [name: 'idx_playlists_author']
+    total_duration_sec [name: 'idx_playlists_duration']
+    category [name: 'idx_playlists_category']
+  }
+}
+
+Table videos {
+  id integer [pk, increment, note: '비디오 PK 식별자']
+  platform varchar(50) [not null, note: '영상 플랫폼 (youtube, netflix 등)']
+  video_id varchar(255) [not null, note: '플랫폼 고유 비디오 ID']
+  title varchar(500) [not null, note: '영상 제목']
+  thumbnail_url varchar(1000) [null, note: '썸네일 이미지 URL']
+  duration_seconds integer [not null, note: '영상 러닝타임 초']
+  channel_title varchar(255) [null, note: '채널/출처명']
+  created_at timestamp [default: 'now()', note: '수집시각']
+
+  Indexes {
+    platform [name: 'idx_videos_platform']
+    video_id [name: 'idx_videos_video_id']
+  }
+}
+
+Table playlist_items {
+  id integer [pk, increment, note: '밥상-비디오 매핑 PK']
+  playlist_id integer [not null, note: '밥상 FK (playlists.id)']
+  video_id integer [not null, note: '비디오 FK (videos.id)']
+  sequence_order integer [default: 0, note: '재생 순서']
+}
+
+Ref: playlists.author_id > users.id [delete: cascade]
+Ref: playlists.forked_from_id > playlists.id [delete: set null]
+Ref: playlist_items.playlist_id > playlists.id [delete: cascade]
+Ref: playlist_items.video_id > videos.id [delete: cascade]

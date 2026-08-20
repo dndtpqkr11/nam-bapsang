@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Clock, ThumbsUp, Users, Share2, Play, Sparkles, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Clock, ThumbsUp, Users, Share2, Play, Sparkles, CheckCircle2, Trash2 } from 'lucide-react';
 import { Playlist, Video } from '@/types';
 import { fetchPlaylistDetail, forkPlaylist, deletePlaylist } from '@/lib/api';
 import { RealtimeBadge } from '@/components/RealtimeBadge';
@@ -125,15 +125,34 @@ export default function PlaylistDetailPage() {
   const myHostRoomIds: string[] = (typeof window !== 'undefined' && localStorage.getItem('my_host_room_ids'))
     ? (() => { try { return JSON.parse(localStorage.getItem('my_host_room_ids')!); } catch { return []; } })()
     : [];
+
+  const currentUser = typeof window !== 'undefined' && localStorage.getItem('user')
+    ? (() => { try { return JSON.parse(localStorage.getItem('user')!); } catch { return null; } })()
+    : null;
+  const isMaster = currentUser?.role === 'master' || (typeof window !== 'undefined' && localStorage.getItem('user_role') === 'master');
+  const isAuthor = isMaster || (currentUser && (
+    (playlist.author_id && playlist.author_id === `u-${currentUser.id}`) ||
+    (playlist.author && playlist.author === currentUser.nickname) ||
+    (typeof window !== 'undefined' && localStorage.getItem('user_nickname') && playlist.author === localStorage.getItem('user_nickname'))
+  )) || playlist.author_id === 'u-me' || myHostRoomIds.includes(playlist.id);
+
   const isHostUser = isLivePlaylist && (
     playlist.author === myNicknameStr || 
     playlist.author === `${myNicknameStr} (방장)` || 
-    playlist.author_id === 'u-me' ||
-    myHostRoomIds.includes(playlist.id)
+    isAuthor
   );
 
   const handleDeleteLiveRoom = async (id: string) => {
     try { await deletePlaylist(id); } catch {}
+    if (typeof window !== 'undefined') {
+      try {
+        let deletedIds: string[] = JSON.parse(localStorage.getItem('deleted_playlist_ids') || '[]');
+        if (!deletedIds.includes(id)) {
+          deletedIds.push(id);
+          localStorage.setItem('deleted_playlist_ids', JSON.stringify(deletedIds));
+        }
+      } catch {}
+    }
     router.push('/');
   };
 
@@ -173,7 +192,7 @@ export default function PlaylistDetailPage() {
           
           <div className="flex items-center gap-3">
             {isLivePlaylist && (
-              <RealtimeBadge playlistId={playlist.id} initialWatchers={playlist.active_watchers || 1} />
+              <RealtimeBadge playlistId={playlist.id} initialWatchers={playlist.active_watchers ?? 0} />
             )}
           </div>
         </div>
@@ -239,6 +258,35 @@ export default function PlaylistDetailPage() {
                   <span>{recommended ? '추천함' : '추천'}</span>
                   <span>({recommendCount})</span>
                 </button>
+
+                {(isAuthor || isMaster) && (
+                  <button
+                    onClick={async () => {
+                      if (window.confirm(isMaster ? '👑 [마스터 관리자] 정말 이 반찬을 전체 멸실 삭제하시겠습니까?' : '정말 이 반찬을 삭제하시겠습니까?')) {
+                        await deletePlaylist(playlist.id);
+                        if (typeof window !== 'undefined') {
+                          try {
+                            let deletedIds: string[] = JSON.parse(localStorage.getItem('deleted_playlist_ids') || '[]');
+                            if (!deletedIds.includes(playlist.id)) {
+                              deletedIds.push(playlist.id);
+                              localStorage.setItem('deleted_playlist_ids', JSON.stringify(deletedIds));
+                            }
+                          } catch {}
+                        }
+                        router.push('/');
+                      }
+                    }}
+                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center gap-1.5 ${
+                      isMaster 
+                        ? 'bg-red-600/30 hover:bg-red-600/60 text-red-300 border-red-500/50 shadow-md shadow-red-950/40' 
+                        : 'bg-red-500/15 hover:bg-red-500/30 text-red-400 border-red-500/30'
+                    }`}
+                    title={isMaster ? "👑 [마스터 관리자] 전체 삭제 권한" : "반찬 삭제하기"}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span className="text-xs font-bold">{isMaster ? '👑 멸실 삭제' : '삭제'}</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>

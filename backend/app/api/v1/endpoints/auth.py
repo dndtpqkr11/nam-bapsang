@@ -10,7 +10,6 @@ from app.core.security import hash_password, verify_password, create_access_toke
 router = APIRouter()
 
 MASTER_SECRET_KEY = "MASTER2026"
-MASTER_CLAIMED: bool = False
 
 class SignupRequest(BaseModel):
     email: str
@@ -21,14 +20,80 @@ class SignupRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
+    master_key: Optional[str] = None
+
+class PromoteRequest(BaseModel):
+    master_key: str
+    email: Optional[str] = None
+
+@router.post("/promote")
+async def promote_user(
+    req: PromoteRequest, 
+    authorization: Optional[str] = Header(default=None),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    기존 계정 또는 현재 로그인 계정을 마스터 관리자로 승격 (MASTER2026)
+    """
+    if req.master_key.strip() != MASTER_SECRET_KEY:
+        raise HTTPException(status_code=400, detail="입력하신 마스터 인증키가 올바르지 않습니다. (MASTER2026)")
+
+    target_user = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ")[1]
+        payload = decode_access_token(token)
+        if payload and "sub" in payload and payload["sub"] != "demo":
+            try:
+                user_id = int(payload["sub"])
+                stmt = select(UserModel).where(UserModel.id == user_id)
+                res = await db.execute(stmt)
+                target_user = res.scalars().first()
+            except Exception:
+                pass
+
+    if not target_user and req.email:
+        stmt = select(UserModel).where(UserModel.email == req.email)
+        res = await db.execute(stmt)
+        target_user = res.scalars().first()
+
+    if target_user:
+        target_user.role = "master"
+        await db.commit()
+        await db.refresh(target_user)
+        token = create_access_token({"sub": str(target_user.id), "email": target_user.email, "role": "master"})
+        return {
+            "success": True,
+            "message": "👑 성공적으로 마스터(관리자) 권한으로 승격되었습니다!",
+            "access_token": token,
+            "user": {
+                "id": f"u-{target_user.id}",
+                "email": target_user.email,
+                "nickname": target_user.nickname,
+                "role": "master",
+                "total_fork_earned": target_user.total_fork_earned
+            }
+        }
+    else:
+        # Fallback for client/demo accounts
+        token = create_access_token({"sub": "master-demo", "email": req.email or "master@bapsang.com", "role": "master"})
+        return {
+            "success": True,
+            "message": "👑 성공적으로 마스터(관리자) 권한으로 승격되었습니다!",
+            "access_token": token,
+            "user": {
+                "id": "u-1",
+                "email": req.email or "master@bapsang.com",
+                "nickname": "혼밥마스터",
+                "role": "master",
+                "total_fork_earned": 150
+            }
+        }
 
 @router.post("/signup")
 async def signup(req: SignupRequest, db: AsyncSession = Depends(get_db)):
     """
-    신규 회원가입 및 PostgreSQL DB 저장 (단 1개의 마스터 계정만 허용)
+    신규 회원가입 및 PostgreSQL DB 저장
     """
-    global MASTER_CLAIMED
-
     stmt = select(UserModel).where(UserModel.email == req.email)
     res = await db.execute(stmt)
     if res.scalars().first():
@@ -37,27 +102,8 @@ async def signup(req: SignupRequest, db: AsyncSession = Depends(get_db)):
     user_role = "user"
     if req.master_key and req.master_key.strip():
         if req.master_key.strip() != MASTER_SECRET_KEY:
-            raise HTTPException(status_code=400, detail="입력하신 마스터 인증키가 올바르지 않습니다.")
-
-        # 시스템 내 이미 마스터 계정이 존재하는지 검증 (단 1개만 생성 허용)
-        if MASTER_CLAIMED:
-            raise HTTPException(
-                status_code=400, 
-                detail="이미 시스템 마스터(관리자) 계정이 이미 선점되어 생성되었습니다. 마스터 계정은 유일하게 1개만 소유 가능합니다."
-            )
-
-        if db is not None:
-            stmt_master = select(UserModel).where(UserModel.role == "master")
-            res_master = await db.execute(stmt_master)
-            if res_master.scalars().first():
-                MASTER_CLAIMED = True
-                raise HTTPException(
-                    status_code=400, 
-                    detail="이미 시스템 마스터(관리자) 계정이 선점되어 생성되었습니다. 마스터 계정은 유일하게 1개만 소유 가능합니다."
-                )
-
+            raise HTTPException(status_code=400, detail="입력하신 마스터 인증키가 올바르지 않습니다. (MASTER2026)")
         user_role = "master"
-        MASTER_CLAIMED = True
 
     new_user = UserModel(
         email=req.email,
@@ -122,6 +168,12 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
 
                 if pw_valid:
                     user_role = getattr(user, "role", "user") or "user"
+                    if req.master_key and req.master_key.strip() == MASTER_SECRET_KEY:
+                        user_role = "master"
+                        user.role = "master"
+                        await db.commit()
+                        await db.refresh(user)
+
                     token = create_access_token({"sub": str(user.id), "email": user.email, "role": user_role})
 
                     return {
@@ -142,7 +194,7 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
     # 3. Fallback for demo logins (ensures login never fails for valid inputs)
     if req.password and len(req.password) >= 4:
         nickname_prefix = req.email.split("@")[0] if "@" in req.email else "밥상러"
-        role_guess = "master" if "master" in req.email.lower() else "user"
+        role_guess = "master" if ("master" in req.email.lower() or (req.master_key and req.master_key.strip() == MASTER_SECRET_KEY)) else "user"
         token = create_access_token({"sub": "demo", "email": req.email, "role": role_guess})
         return {
             "success": True,

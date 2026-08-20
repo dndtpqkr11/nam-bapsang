@@ -32,7 +32,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   onClose, 
   playlistId = 'pl-1',
   enableChat = false,
-  initialWatchers = 38,
+  initialWatchers = 0,
   isHost = false,
   hostNickname,
   onDeleteLiveRoom,

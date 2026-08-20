@@ -1,0 +1,145 @@
+// Nam-Bapsang Extended Enterprise Database ERD Schema (.dbml)
+// dbdiagram.io 100% 호환 대규모 상세 확장 스키마
+
+enum UserRole {
+  user
+  master
+  admin
+}
+
+enum MealCategory {
+  breakfast [note: '아침식사']
+  lunch [note: '점심식사']
+  dinner [note: '저녁식사']
+  snack [note: '야식/간식']
+  general [note: '식사 반찬']
+}
+
+enum VideoPlatform {
+  youtube
+  netflix
+  tving
+  coupang
+  disney
+  wavve
+}
+
+enum RoomStatus {
+  active [note: '활성 라이브 중']
+  idle [note: '대기 중']
+  closed [note: '종료됨']
+}
+
+Table users {
+  id integer [pk, increment, note: '유저 PK 식별자']
+  email varchar(255) [unique, not null, note: '로그인 이메일 계정']
+  hashed_password varchar(255) [not null, note: 'Bcrypt 단방향 암호화 비밀번호']
+  nickname varchar(100) [not null, note: '사용자 닉네임']
+  role UserRole [default: 'user', note: '계정 권한 (master / user)']
+  profile_image_url text [null, note: '프로필 아바타 이미지 URL']
+  is_active boolean [default: true, note: '계정 활성화 상태']
+  last_login_at timestamp [null, note: '최종 로그인 시각']
+  created_at timestamp [default: 'now()', note: '계정 생성시각']
+
+  Indexes {
+    email [name: 'idx_users_email']
+    role [name: 'idx_users_role']
+  }
+}
+
+Table playlists {
+  id integer [pk, increment, note: '밥상 PK 식별자']
+  title varchar(255) [not null, note: '밥상 제목']
+  category MealCategory [default: 'general', note: '식사 시간대 카테고리']
+  author_id integer [not null, note: '작성자 유저 FK']
+  total_duration_sec integer [default: 0, note: '총 러닝타임 (초 단위)']
+  fork_count integer [default: 0, note: '추천/포크 수']
+  forked_from_id integer [null, note: '원본 포크 밥상 FK']
+  is_live boolean [default: false, note: '현재 실시간 라이브 방 여부']
+  live_started_at timestamp [null, note: '라이브 방 개설 및 영상 시작 타임스탬프']
+  status RoomStatus [default: 'active', note: '밥상 방 상태']
+  created_at timestamp [default: 'now()', note: '밥상 생성시각']
+
+  Indexes {
+    author_id [name: 'idx_playlists_author']
+    total_duration_sec [name: 'idx_playlists_duration']
+    is_live [name: 'idx_playlists_live']
+  }
+}
+
+Table videos {
+  id integer [pk, increment, note: '비디오 PK 식별자']
+  title varchar(255) [not null, note: '영상 제목']
+  platform VideoPlatform [default: 'youtube', note: '영상 플랫폼 (youtube, netflix 등)']
+  video_id varchar(100) [not null, note: '플랫폼 고유 비디오 ID (11자리 YT ID)']
+  duration_seconds integer [default: 0, note: '영상 러닝타임 (초 단위)']
+  thumbnail_url text [note: '썸네일 이미지 URL']
+  channel_title varchar(255) [note: '채널/출처 명칭']
+  created_at timestamp [default: 'now()', note: '수집 등록시각']
+
+  Indexes {
+    video_id [name: 'idx_videos_platform_id']
+  }
+}
+
+Table playlist_items {
+  id integer [pk, increment, note: '밥상아이템 매핑 PK']
+  playlist_id integer [not null, note: '밥상 FK (CASCADE DELETE)']
+  video_id integer [not null, note: '비디오 FK (CASCADE DELETE)']
+  sequence_order integer [default: 0, note: '밥상 내 재생 순서 (0-indexed)']
+
+  Indexes {
+    (playlist_id, video_id) [unique, name: 'idx_playlist_video_unique']
+  }
+}
+
+Table chat_messages {
+  id integer [pk, increment, note: '채팅 메시지 PK']
+  playlist_id integer [not null, note: '라이브 밥상방 FK']
+  sender_id integer [null, note: '작성자 유저 FK (익명 시 null)']
+  nickname varchar(100) [not null, note: '작성자 닉네임']
+  text text [not null, note: '채팅 대화 본문']
+  is_host_msg boolean [default: false, note: '방장 공지 메시지 여부']
+  is_system_msg boolean [default: false, note: '시스템 상태 알림 여부']
+  created_at timestamp [default: 'now()', note: '메시지 전송시각']
+
+  Indexes {
+    playlist_id [name: 'idx_chat_playlist']
+    created_at [name: 'idx_chat_created']
+  }
+}
+
+Table host_sessions {
+  id integer [pk, increment, note: '방장 세션 이력 PK']
+  playlist_id integer [not null, note: '라이브 밥상방 FK']
+  host_id integer [not null, note: '방장 유저 FK']
+  active_watcher_count integer [default: 1, note: '동시 시청 피크 인원']
+  started_at timestamp [default: 'now()', note: '방 개설 시각']
+  ended_at timestamp [null, note: '방 종료 시각']
+
+  Indexes {
+    (playlist_id, host_id) [name: 'idx_host_session']
+  }
+}
+
+Table playlist_likes {
+  id integer [pk, increment, note: '추천/포크 이력 PK']
+  playlist_id integer [not null, note: '추천 밥상 FK']
+  user_id integer [not null, note: '추천 유저 FK']
+  created_at timestamp [default: 'now()', note: '추천 일시']
+
+  Indexes {
+    (playlist_id, user_id) [unique, name: 'idx_like_unique']
+  }
+}
+
+Ref: playlists.author_id > users.id [delete: cascade]
+Ref: playlists.forked_from_id > playlists.id [delete: set null]
+Ref: playlist_items.playlist_id > playlists.id [delete: cascade]
+Ref: playlist_items.video_id > videos.id [delete: cascade]
+Ref: chat_messages.playlist_id > playlists.id [delete: cascade]
+Ref: chat_messages.sender_id > users.id [delete: set null]
+Ref: host_sessions.playlist_id > playlists.id [delete: cascade]
+Ref: host_sessions.host_id > users.id [delete: cascade]
+Ref: playlist_likes.playlist_id > playlists.id [delete: cascade]
+Ref: playlist_likes.user_id > users.id [delete: cascade]
