@@ -73,6 +73,42 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     };
   }, [activeVid]);
 
+  // Listen to native YouTube iframe events (Play, Pause, Seek, End) to sync buttons & states bi-directionally
+  useEffect(() => {
+    const handleWindowMessage = (event: MessageEvent) => {
+      try {
+        let data = event.data;
+        if (typeof data === 'string') {
+          data = JSON.parse(data);
+        }
+        if (!data) return;
+
+        // YouTube onStateChange: 1 = Playing, 2 = Paused, 0 = Ended, 3 = Buffering
+        if (data.event === 'onStateChange') {
+          if (data.info === 1) {
+            setIsPlaying(true);
+          } else if (data.info === 2 || data.info === 0) {
+            setIsPlaying(false);
+          }
+        } else if (data.event === 'infoDelivery') {
+          if (typeof data.info?.playerState === 'number') {
+            if (data.info.playerState === 1) {
+              setIsPlaying(true);
+            } else if (data.info.playerState === 2 || data.info.playerState === 0) {
+              setIsPlaying(false);
+            }
+          }
+          if (typeof data.info?.currentTime === 'number' && isHost) {
+            setPlaybackTime(Math.floor(data.info.currentTime));
+          }
+        }
+      } catch {}
+    };
+
+    window.addEventListener('message', handleWindowMessage);
+    return () => window.removeEventListener('message', handleWindowMessage);
+  }, [isHost]);
+
   // YouTube IFrame command helper with listening handshake
   const sendIframeCommand = (func: string, args: any[] = []) => {
     if (iframeRef.current && iframeRef.current.contentWindow) {
@@ -90,6 +126,11 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       try {
         // Send listening handshake so YouTube iframe accepts postMessage commands
         iframeRef.current.contentWindow.postMessage(JSON.stringify({ event: 'listening' }), '*');
+        // Subscribe to onStateChange events
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'addEventListener', args: ['onStateChange'] }),
+          '*'
+        );
         const target = hostSyncTime > 0 ? hostSyncTime : playbackTime;
         if (target > 0) {
           iframeRef.current.contentWindow.postMessage(
