@@ -21,10 +21,12 @@ interface LiveChatDrawerProps {
   playlistTitle?: string;
   initialWatchers?: number;
   onHostVideoChange?: (video: Video, elapsedSeconds?: number) => void;
+  onSyncPlayback?: (data: { video?: Video; currentTime: number; isPlaying: boolean; hostNickname?: string }) => void;
   onDeleteLiveRoom?: (playlistId: string) => void;
   onRoomDeleted?: () => void;
   isHost?: boolean;
   hostNickname?: string;
+  currentPlaybackInfo?: { video: Video | null; currentTime: number; isPlaying: boolean };
 }
 
 const PRESET_MESSAGES = [
@@ -48,10 +50,12 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
   playlistTitle,
   initialWatchers = 0,
   onHostVideoChange,
+  onSyncPlayback,
   onDeleteLiveRoom,
   onRoomDeleted,
   isHost = false,
-  hostNickname = '독고다이'
+  hostNickname = '독고다이',
+  currentPlaybackInfo
 }) => {
   const baseWatchers = initialWatchers;
   const displayHostName = hostNickname || '혼밥방장';
@@ -90,14 +94,42 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
   const nicknameRef = useRef(nickname);
   const isHostRef = useRef(isHost);
   const onHostVideoChangeRef = useRef(onHostVideoChange);
+  const onSyncPlaybackRef = useRef(onSyncPlayback);
   const baseWatchersRef = useRef(baseWatchers);
   const onRoomDeletedRef = useRef(onRoomDeleted);
   const isDeletingRef = useRef<boolean>(false);
+  const currentPlaybackInfoRef = useRef(currentPlaybackInfo);
 
   useEffect(() => { nicknameRef.current = nickname; }, [nickname]);
   useEffect(() => { isHostRef.current = isHost; }, [isHost]);
   useEffect(() => { onHostVideoChangeRef.current = onHostVideoChange; }, [onHostVideoChange]);
+  useEffect(() => { onSyncPlaybackRef.current = onSyncPlayback; }, [onSyncPlayback]);
   useEffect(() => { baseWatchersRef.current = baseWatchers; }, [baseWatchers]);
+  useEffect(() => { currentPlaybackInfoRef.current = currentPlaybackInfo; }, [currentPlaybackInfo]);
+
+  // Host Periodic Playback Heartbeat (broadcasts current watch time to all participants every 2s)
+  useEffect(() => {
+    if (!isHost) return;
+
+    const broadcastHeartbeat = () => {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && currentPlaybackInfoRef.current?.video) {
+        try {
+          wsRef.current.send(JSON.stringify({
+            type: 'PLAYBACK_UPDATE',
+            playlist_id: playlistId,
+            video: currentPlaybackInfoRef.current.video,
+            current_time: currentPlaybackInfoRef.current.currentTime,
+            is_playing: currentPlaybackInfoRef.current.isPlaying,
+            host_nickname: nicknameRef.current || displayHostName,
+            sender_id: clientSessionIdRef.current
+          }));
+        } catch {}
+      }
+    };
+
+    const timer = setInterval(broadcastHeartbeat, 2000);
+    return () => clearInterval(timer);
+  }, [isHost, playlistId, displayHostName]);
   useEffect(() => { onRoomDeletedRef.current = onRoomDeleted; }, [onRoomDeleted]);
 
   useEffect(() => {
@@ -247,12 +279,36 @@ export const LiveChatDrawer: React.FC<LiveChatDrawerProps> = ({
               setMessages((prev) => [...prev, newMsg]);
             }
           } else if (data.type === 'SYNC_VIDEO_STATE') {
-            if (data.video && onHostVideoChangeRef.current) {
+            if (onSyncPlaybackRef.current) {
+              onSyncPlaybackRef.current({
+                video: data.video,
+                currentTime: data.current_time ?? data.elapsed_seconds ?? 0,
+                isPlaying: data.is_playing ?? true,
+                hostNickname: data.host_nickname
+              });
+            } else if (data.video && onHostVideoChangeRef.current) {
               onHostVideoChangeRef.current(data.video, data.elapsed_seconds || 0);
             }
+          } else if (data.type === 'PLAYBACK_UPDATE') {
+            // Participant receives real-time playback update from host
+            if (!isHostRef.current && onSyncPlaybackRef.current) {
+              onSyncPlaybackRef.current({
+                video: data.video,
+                currentTime: data.current_time ?? data.elapsed_seconds ?? 0,
+                isPlaying: data.is_playing ?? true,
+                hostNickname: data.host_nickname
+              });
+            }
           } else if (data.type === 'HOST_CHANGE_VIDEO') {
-            if (data.video && onHostVideoChangeRef.current) {
-              onHostVideoChangeRef.current(data.video, data.elapsed_seconds || 0);
+            if (onSyncPlaybackRef.current) {
+              onSyncPlaybackRef.current({
+                video: data.video,
+                currentTime: 0,
+                isPlaying: true,
+                hostNickname: data.host_nickname
+              });
+            } else if (data.video && onHostVideoChangeRef.current) {
+              onHostVideoChangeRef.current(data.video, 0);
             }
             if (data.system_message) {
               const sysMsg: ChatMessage = {

@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { X, ExternalLink, Sparkles, Tv, Play, MessageSquare, ArrowRight, ShieldCheck, Crown } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, ExternalLink, Sparkles, Tv, Play, Pause, RotateCcw, FastForward, Rewind, MessageSquare, ArrowRight, ShieldCheck, Crown, Radio, CheckCircle2, Zap } from 'lucide-react';
 import { Video } from '@/types';
-import { triggerDeepLink } from '@/lib/deeplink';
+import { triggerDeepLink, formatSecondsToMMSS } from '@/lib/deeplink';
 import { LiveChatDrawer } from './LiveChatDrawer';
 
 interface VideoPlayerModalProps {
@@ -39,20 +39,22 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   onRoomDeleted
 }) => {
   const [currentVideo, setCurrentVideo] = useState<Video | null>(video);
-  const [startSeconds, setStartSeconds] = useState<number>(0);
+  const [playbackTime, setPlaybackTime] = useState<number>(0);
+  const [isPlaying, setIsPlaying] = useState<boolean>(true);
+  const [hostSyncTime, setHostSyncTime] = useState<number>(0);
+  const [hostIsPlaying, setHostIsPlaying] = useState<boolean>(true);
+  const [syncToast, setSyncToast] = useState<string | null>(null);
+  
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const lastSyncTimeRef = useRef<number>(0);
 
   useEffect(() => {
     setCurrentVideo(video);
-    setStartSeconds(0);
+    setPlaybackTime(0);
+    setIsPlaying(true);
   }, [video?.video_id, video?.id, video]);
 
-  const handleVideoChange = (newVid: Video, elapsed?: number) => {
-    setCurrentVideo(newVid);
-    setStartSeconds(typeof elapsed === 'number' && elapsed > 0 ? elapsed : 0);
-  };
-
   const activeVid = currentVideo || video;
-
   const isYoutube = activeVid?.platform === 'youtube';
   const [showChat, setShowChat] = useState<boolean>(enableChat && !!isYoutube);
 
@@ -70,6 +72,94 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
       document.body.style.overflow = '';
     };
   }, [activeVid]);
+
+  // YouTube IFrame command helper
+  const sendIframeCommand = (func: string, args: any[] = []) => {
+    if (iframeRef.current && iframeRef.current.contentWindow) {
+      try {
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func, args }),
+          '*'
+        );
+      } catch {}
+    }
+  };
+
+  // Playback timer progression (advances time every second when playing)
+  useEffect(() => {
+    if (!isPlaying || !activeVid) return;
+
+    const timer = setInterval(() => {
+      setPlaybackTime((prev) => {
+        const next = prev + 1;
+        const maxDuration = activeVid.duration_seconds || 900;
+        return next <= maxDuration ? next : maxDuration;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [isPlaying, activeVid]);
+
+  // Host playback controls
+  const handleHostSeek = (targetSeconds: number) => {
+    const clamped = Math.max(0, targetSeconds);
+    setPlaybackTime(clamped);
+    sendIframeCommand('seekTo', [clamped, true]);
+  };
+
+  const handleHostTogglePlay = () => {
+    const nextState = !isPlaying;
+    setIsPlaying(nextState);
+    sendIframeCommand(nextState ? 'playVideo' : 'pauseVideo');
+  };
+
+  // Participant incoming synchronization handler
+  const handleSyncPlayback = (data: { video?: Video; currentTime: number; isPlaying: boolean; hostNickname?: string }) => {
+    if (data.video && activeVid && data.video.video_id !== activeVid.video_id) {
+      setCurrentVideo(data.video);
+      setPlaybackTime(data.currentTime);
+      setIsPlaying(data.isPlaying);
+      setHostSyncTime(data.currentTime);
+      setHostIsPlaying(data.isPlaying);
+      return;
+    }
+
+    setHostSyncTime(data.currentTime);
+    setHostIsPlaying(data.isPlaying);
+
+    // If drift is greater than 2.5 seconds, auto-align participant playback to host
+    const drift = Math.abs(playbackTime - data.currentTime);
+    const now = Date.now();
+    if (drift > 2.5 && now - lastSyncTimeRef.current > 3000) {
+      lastSyncTimeRef.current = now;
+      setPlaybackTime(data.currentTime);
+      sendIframeCommand('seekTo', [data.currentTime, true]);
+    }
+
+    if (data.isPlaying !== isPlaying) {
+      setIsPlaying(data.isPlaying);
+      sendIframeCommand(data.isPlaying ? 'playVideo' : 'pauseVideo');
+    }
+  };
+
+  // Manual one-click snap to Host's exact timestamp
+  const handleManualSnapToHost = () => {
+    const target = hostSyncTime > 0 ? hostSyncTime : playbackTime;
+    setPlaybackTime(target);
+    sendIframeCommand('seekTo', [target, true]);
+    if (hostIsPlaying) {
+      setIsPlaying(true);
+      sendIframeCommand('playVideo');
+    }
+    setSyncToast(`⚡ 방장 시점(${formatSecondsToMMSS(target)})으로 즉시 동기화되었습니다!`);
+    setTimeout(() => setSyncToast(null), 2500);
+  };
+
+  const handleVideoChange = (newVid: Video, elapsed?: number) => {
+    setCurrentVideo(newVid);
+    setPlaybackTime(typeof elapsed === 'number' && elapsed > 0 ? elapsed : 0);
+    setIsPlaying(true);
+  };
 
   if (!activeVid) return null;
 
@@ -97,6 +187,13 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         activeChat ? 'w-[95vw] max-w-[1560px]' : 'w-[90vw] max-w-5xl'
       }`}>
         
+        {syncToast && (
+          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 px-4 py-2 rounded-2xl bg-amber-500 text-black font-black text-xs shadow-2xl flex items-center gap-2 animate-bounce border border-amber-300">
+            <Zap className="w-4 h-4 fill-current" />
+            <span>{syncToast}</span>
+          </div>
+        )}
+
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-white/10 pb-3">
           <div className="flex items-center gap-2.5 flex-wrap">
@@ -108,8 +205,8 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             </span>
 
             {enableChat && (
-              <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
-                <Crown className="w-3.5 h-3.5 text-amber-400" /> 방장 동기화 실시간 라이브 룸
+              <span className="text-xs font-black px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
+                <Crown className="w-3.5 h-3.5 text-amber-400" /> {isHost ? '👑 내가 방장 (실시간 송출)' : `👑 방장 (${hostNickname || '방장'}) 동기화 룸`}
               </span>
             )}
 
@@ -136,21 +233,104 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           </button>
         </div>
 
+        {/* Co-watching Time Sync Live Status Banner */}
+        {enableChat && isYoutube && (
+          <div className={`p-3 rounded-2xl border flex items-center justify-between gap-3 text-xs flex-wrap ${
+            isHost 
+              ? 'bg-amber-500/10 border-amber-500/30 text-amber-300' 
+              : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+          }`}>
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
+              </span>
+              <span className="font-bold">
+                {isHost ? (
+                  <>👑 방장 송출 중: 현재 시청 시간 <strong className="text-white font-mono font-black">{formatSecondsToMMSS(playbackTime)}</strong> ({isPlaying ? '재생 중' : '일시정지'}) 이 모든 참가자에게 실시간 자동 동기화됩니다.</>
+                ) : (
+                  <>🔴 방장 실시간 동기화 중: 방장 시점 <strong className="text-white font-mono font-black">{formatSecondsToMMSS(hostSyncTime || playbackTime)}</strong> ({hostIsPlaying ? '재생 중' : '일시정지'})</>
+                )}
+              </span>
+            </div>
+
+            {!isHost && (
+              <button
+                onClick={handleManualSnapToHost}
+                className="px-3 py-1 rounded-xl bg-gradient-to-r from-rose-500 to-amber-500 text-white font-black text-[11px] shadow-md hover:scale-105 transition-all flex items-center gap-1 cursor-pointer shrink-0"
+                title="방장의 현재 시청 위치로 1초 만에 맞추기"
+              >
+                <Zap className="w-3.5 h-3.5 fill-current" />
+                <span>⚡ 방장 시점으로 1초 맞춤</span>
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Video Player + Chat Split Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
           
           {/* Main Video Player Container */}
           <div className={`${activeChat ? 'lg:col-span-8' : 'lg:col-span-12'} space-y-4`}>
             {isYoutube ? (
-              <div className="relative aspect-video rounded-2xl overflow-hidden bg-black border border-white/10 shadow-2xl">
-                <iframe
-                  key={`${embedYtId}-${startSeconds}`}
-                  src={`https://www.youtube.com/embed/${embedYtId}?autoplay=1&enablejsapi=1${startSeconds > 0 ? `&start=${startSeconds}` : ''}`}
-                  title={activeVid.title}
-                  className="w-full h-full border-0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
+              <div className="space-y-3">
+                <div className="relative aspect-video rounded-2xl overflow-hidden bg-black border border-white/10 shadow-2xl">
+                  <iframe
+                    ref={iframeRef}
+                    key={`${embedYtId}-${Math.floor(playbackTime)}`}
+                    src={`https://www.youtube.com/embed/${embedYtId}?autoplay=1&enablejsapi=1&start=${Math.max(0, Math.floor(playbackTime))}`}
+                    title={activeVid.title}
+                    className="w-full h-full border-0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                </div>
+
+                {/* Host Interactive Playback Controls Bar */}
+                {enableChat && isHost && (
+                  <div className="p-3 rounded-2xl bg-black/40 border border-white/10 flex items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleHostTogglePlay}
+                        className="px-3 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-md"
+                      >
+                        {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+                        <span>{isPlaying ? '모두 일시정지' : '모두 재생'}</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleHostSeek(playbackTime - 10)}
+                        className="p-1.5 px-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-gray-200 font-bold flex items-center gap-1 transition-all cursor-pointer"
+                        title="10초 뒤로 가기"
+                      >
+                        <Rewind className="w-3.5 h-3.5" />
+                        <span>-10초</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleHostSeek(playbackTime + 10)}
+                        className="p-1.5 px-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-gray-200 font-bold flex items-center gap-1 transition-all cursor-pointer"
+                        title="10초 앞으로 가기"
+                      >
+                        <FastForward className="w-3.5 h-3.5" />
+                        <span>+10초</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleHostSeek(0)}
+                        className="p-1.5 px-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-gray-200 font-bold flex items-center gap-1 transition-all cursor-pointer"
+                        title="처음부터 다시 보기"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>처음부터</span>
+                      </button>
+                    </div>
+
+                    <div className="font-mono text-xs text-amber-300 font-bold">
+                      ⏱️ {formatSecondsToMMSS(playbackTime)}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               /* Non-YouTube External OTT Redirect Notice Modal UI */
@@ -223,6 +403,12 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
                   isHost={isHost}
                   hostNickname={hostNickname || activeVid.channel_title}
                   onHostVideoChange={(newVid, elapsed) => handleVideoChange(newVid, elapsed)}
+                  onSyncPlayback={handleSyncPlayback}
+                  currentPlaybackInfo={{
+                    video: activeVid,
+                    currentTime: playbackTime,
+                    isPlaying: isPlaying
+                  }}
                   onDeleteLiveRoom={onDeleteLiveRoom}
                   onRoomDeleted={onRoomDeleted}
                 />
@@ -235,3 +421,4 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     </div>
   );
 };
+

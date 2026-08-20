@@ -59,12 +59,18 @@ class ConnectionManager:
             try:
                 st = self.room_video_state[playlist_id]
                 import time
-                elapsed = max(0, int(time.time() - st.get("started_at", time.time())))
+                elapsed = 0.0
+                if st.get("is_playing", True):
+                    elapsed = max(0.0, time.time() - st.get("last_updated_at", time.time()))
+                calculated_time = st.get("current_time", 0.0) + elapsed
                 await websocket.send_json({
                     "type": "SYNC_VIDEO_STATE",
                     "playlist_id": playlist_id,
                     "video": st.get("video"),
-                    "elapsed_seconds": elapsed
+                    "current_time": calculated_time,
+                    "elapsed_seconds": int(calculated_time),
+                    "is_playing": st.get("is_playing", True),
+                    "host_nickname": st.get("host_nickname", "방장")
                 })
             except Exception:
                 pass
@@ -191,20 +197,53 @@ async def websocket_presence(websocket: WebSocket, playlist_id: str, client_id: 
 
                         await manager.broadcast_payload(playlist_id, chat_event)
 
+                    elif msg_type == "PLAYBACK_UPDATE":
+                        # 방장의 실시간 재생 위치/상태(재생/일시정지/탐색) 업데이트 수신 및 전체 브로드캐스트
+                        import time
+                        video_payload = payload.get("video")
+                        current_time = float(payload.get("current_time", 0.0))
+                        is_playing = bool(payload.get("is_playing", True))
+                        host_nickname = payload.get("host_nickname", "👑 방장")
+
+                        manager.room_video_state[playlist_id] = {
+                            "video": video_payload,
+                            "current_time": current_time,
+                            "is_playing": is_playing,
+                            "last_updated_at": time.time(),
+                            "host_nickname": host_nickname
+                        }
+
+                        sync_event = {
+                            "type": "PLAYBACK_UPDATE",
+                            "playlist_id": playlist_id,
+                            "video": video_payload,
+                            "current_time": current_time,
+                            "elapsed_seconds": int(current_time),
+                            "is_playing": is_playing,
+                            "host_nickname": host_nickname,
+                            "sender_id": payload.get("sender_id") or session_id
+                        }
+                        await manager.broadcast_payload(playlist_id, sync_event)
+
                     elif msg_type == "HOST_CHANGE_VIDEO":
                         # 방장에 의한 영상 교체 동기화 및 시작 시각 타임스탬프 기록
                         video_payload = payload.get("video", {})
                         import time
                         manager.room_video_state[playlist_id] = {
                             "video": video_payload,
-                            "started_at": time.time()
+                            "current_time": 0.0,
+                            "is_playing": True,
+                            "last_updated_at": time.time(),
+                            "host_nickname": payload.get("host_nickname", "👑 방장")
                         }
 
                         sync_event = {
                             "type": "HOST_CHANGE_VIDEO",
                             "playlist_id": playlist_id,
                             "video": video_payload,
+                            "current_time": 0.0,
                             "elapsed_seconds": 0,
+                            "is_playing": True,
                             "host_nickname": payload.get("host_nickname", "👑 방장"),
                             "system_message": f"👑 {payload.get('host_nickname', '방장')} 님이 실시간 반찬 영상을 교체하셨습니다!"
                         }
