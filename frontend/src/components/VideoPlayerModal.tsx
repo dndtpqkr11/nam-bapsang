@@ -274,31 +274,43 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           <div className={`${activeChat ? 'lg:col-span-8' : 'lg:col-span-12'} space-y-4`}>
             {isYoutube ? (
               <div className="space-y-3">
-                <div className="relative aspect-video rounded-2xl overflow-hidden bg-black border border-white/10 shadow-2xl">
+                <div className="relative aspect-video rounded-2xl overflow-hidden bg-black border border-white/10 shadow-2xl group/screen">
+                  {/* YouTube IFrame Embed (Pointer events strictly disabled for participants like a TV broadcast/Discord stream) */}
                   <iframe
                     ref={iframeRef}
                     key={`yt-${embedYtId}`}
-                    src={`https://www.youtube.com/embed/${embedYtId}?autoplay=1&enablejsapi=1&controls=${enableChat && !isHost ? '0' : '1'}&disablekb=${enableChat && !isHost ? '1' : '0'}&origin=${typeof window !== 'undefined' ? window.location.origin : ''}`}
+                    src={`https://www.youtube.com/embed/${embedYtId}?autoplay=1&enablejsapi=1&controls=${enableChat && !isHost ? '0' : '1'}&disablekb=${enableChat && !isHost ? '1' : '0'}&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&origin=${typeof window !== 'undefined' ? window.location.origin : ''}`}
                     title={activeVid.title}
-                    className="w-full h-full border-0"
+                    className={`w-full h-full border-0 ${enableChat && !isHost ? 'pointer-events-none select-none' : ''}`}
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
+                    allowFullScreen={isHost}
                   />
 
-                  {/* Lock Overlay for Participants in Live Room (prevents scrubbing, pausing, clicking inside player) */}
+                  {/* TV / Discord Stream Broadcast Mode Overlay for Participants (100% blocks clicking, pausing, scrubbing) */}
                   {enableChat && !isHost && (
                     <div 
-                      className="absolute inset-0 z-20 cursor-not-allowed bg-transparent flex items-end justify-start p-3 group/overlay select-none"
-                      title="🔒 방장 전용 제어 모드: 재생/일시정지 및 시점 이동은 방장만 제어할 수 있습니다."
+                      className="absolute inset-0 z-30 pointer-events-auto cursor-default bg-transparent flex flex-col justify-between p-4 select-none"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSyncToast(`🔒 영상 제어는 방장(👑 ${hostNickname || '방장'})만 가능합니다.`);
+                        setSyncToast(`📺 실시간 방송 시청 모드 (디스코드 화면 공유 형태) — 영상 조작은 방장(👑 ${hostNickname || '방장'})만 가능합니다.`);
                         setTimeout(() => setSyncToast(null), 2500);
                       }}
                     >
-                      <div className="opacity-0 group-hover/overlay:opacity-100 transition-opacity bg-black/80 backdrop-blur-md border border-rose-500/40 text-rose-300 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-xl">
-                        <Lock className="w-3.5 h-3.5 text-rose-400" />
-                        <span>🔒 [방장 제어 모드] 영상 시점 및 재생 조작은 방장(👑 {hostNickname || '방장'}) 전용입니다.</span>
+                      {/* Top Stream Badge */}
+                      <div className="flex items-center justify-between pointer-events-none">
+                        <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/70 backdrop-blur-md border border-white/20 text-[11px] font-bold text-white shadow-lg">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                          </span>
+                          <span>LIVE STREAM • 👑 {hostNickname || '방장'} 화면 공유 중</span>
+                        </div>
+                      </div>
+
+                      {/* Bottom Remote Control Info Notice */}
+                      <div className="opacity-0 group-hover/screen:opacity-100 transition-opacity bg-black/85 backdrop-blur-md border border-white/20 text-gray-200 text-[11px] font-bold px-3 py-2 rounded-xl flex items-center gap-2 shadow-2xl self-start pointer-events-none">
+                        <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <span>📺 참가자는 리모컨 없는 TV를 보듯이 방장의 재생 화면을 실시간 시청합니다.</span>
                       </div>
                     </div>
                   )}
